@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Catenaires / Candlestick Playback</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">Elliott Carter / Catenaires</p>
+        <h1>Signal in motion</h1>
+      </div>
+      <p class="statement">A composed line translated into the language of price: six notes become one candle, and uncertainty becomes visible.</p>
+    </header>
+
+    <section class="workbench" aria-label="Catenaires candlestick playback">
+      <div class="chart-frame">
+        <div class="chart-meta">
+          <span id="measureLabel">MEASURE 01 / CANDLE 01</span>
+          <span id="statusLabel">READY</span>
+        </div>
+        <canvas id="chart" aria-label="Animated candlestick chart"></canvas>
+        <div class="chart-foot">
+          <span>cumulative semitone delta</span>
+          <span id="timeLabel">00:00 / 00:00</span>
+        </div>
+      </div>
+
+      <aside class="controls">
+        <div class="control-block intro-block">
+          <span class="section-label">Playback</span>
+          <div class="transport">
+            <button id="playButton" class="primary" type="button">Play</button>
+            <button id="pauseButton" type="button">Pause</button>
+            <button id="restartButton" class="icon-button" type="button" aria-label="Restart">↺</button>
+            <button id="finishButton" class="icon-button" type="button" aria-label="Finish playback">››</button>
+          </div>
+          <input id="timeline" class="timeline" type="range" min="0" max="1" step="0.001" value="0" aria-label="Playback position">
+        </div>
+
+        <div class="control-block settings">
+          <label for="seed">Random seed <output id="seedValue">42</output></label>
+          <input id="seed" type="number" value="42" step="1">
+          <label for="speed">Playback speed <output id="speedValue">1.00x</output></label>
+          <input id="speed" type="range" min="0.5" max="2" step="0.05" value="1">
+        </div>
+
+        <div class="legend">
+          <div><i class="swatch bullish"></i> bullish close</div>
+          <div><i class="swatch bearish"></i> bearish close</div>
+          <div><i class="swatch active"></i> current path</div>
+        </div>
+
+        <div class="readout">
+          <span class="section-label">Current candle</span>
+          <div class="readout-grid">
+            <span>open <b id="openValue">0.00</b></span>
+            <span>high <b id="highValue">0.00</b></span>
+            <span>low <b id="lowValue">0.00</b></span>
+            <span>close <b id="closeValue">0.00</b></span>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <footer>
+      <span>LOCAL MIDI STUDY / 50MS FRAME</span>
+      <span id="noteCount">Loading MIDI…</span>
+    </footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
