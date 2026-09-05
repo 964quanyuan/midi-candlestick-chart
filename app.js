@@ -1,13 +1,22 @@
-const CANDLE_SIZE = 6;
 const ACCENT_VELOCITY = 120;
 const UPDATE_INTERVAL = 50;
 const AUDIO_LOOKAHEAD = 0.35;
-const MIDI_URL = 'catenaires_sample.mid';
+const PIECES = {
+  CTNRS: { ticker: 'CRTR: CTNRS', file: 'pieces/catenaires_sample.mid', candleSize: 6, silenceFirst: true },
+  WTRFLL: { ticker: 'CHPN: WTRFLL', file: 'pieces/op10-1.mid', candleSize: 8, silenceFirst: false },
+};
+const LOW_REGISTER_PITCH = 36;
+const FULL_VOLUME_PITCH = 72;
+const LOW_REGISTER_BOOST_DB = 9;
+const LOW_REGISTER_EXTRA_SUSTAIN = 1.8;
+const SUSTAIN_MULTIPLIER = 0.5;
+const VELOCITY_FLOOR = 0.25;
+const VELOCITY_CURVE = 1.7;
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('chart');
 const ctx = canvas.getContext('2d');
-const state = { notes: [], candles: [], duration: 0, time: 0, seed: 42, speed: 1, playing: false, paused: false, raf: 0, audio: null, audioNoteIndex: 0, audioOrigin: 0, audioStart: 0 };
+const state = { pieceKey: 'CTNRS', piece: PIECES.CTNRS, notes: [], chartNotes: [], candles: [], duration: 0, time: 0, seed: 42, speed: 1, playing: false, paused: false, raf: 0, audio: null, audioNoteIndex: 0, audioOrigin: 0, audioStart: 0, xStart: 0, xCount: 0, yZoom: 1, yCenter: null, dragY: null, dragX: null };
 
 function seededRandom(seed) {
   let value = (seed >>> 0) || 1;
@@ -41,13 +50,47 @@ function parseMidi(buffer) {
   return notes;
 }
 
+function applyPieceSpecificAudio(notes, piece) {
+  if (piece.silenceFirst && notes.length > 0) notes[0].silent = true;
+  return notes;
+}
+
+function selectFormationNotes(notes, random = Math.random) {
+  const formationNotes = [];
+  let index = 0;
+
+  while (index < notes.length) {
+    const timestamp = notes[index].time;
+    const simultaneousNotes = [notes[index]];
+    index += 1;
+
+    while (index < notes.length && notes[index].time === timestamp) {
+      simultaneousNotes.push(notes[index]);
+      index += 1;
+    }
+
+    const selectedIndex = Math.floor(random() * simultaneousNotes.length);
+    formationNotes.push(simultaneousNotes[selectedIndex]);
+  }
+
+  return formationNotes;
+}
+
 function randomizeDelta(delta, accented, random) { const low = Math.min(-0.5, -0.25 * Math.abs(delta)); const high = Math.max(0.5, 0.25 * Math.abs(delta)); let result = delta + (random() * (high - low) + low); if (accented) { const accentLow = Math.min(0, 1.25 * delta); const accentHigh = Math.max(0, 1.25 * delta); result += random() * (accentHigh - accentLow) + accentLow; } return result; }
-function buildCandles(notes, seed) {
-  const random = seededRandom(seed), candles = [];
-  for (let index = 0; index + CANDLE_SIZE <= notes.length; index += CANDLE_SIZE) {
-    const chunk = notes.slice(index, index + CANDLE_SIZE), path = [0], deltas = [];
-    for (let i = 0; i < CANDLE_SIZE - 1; i++) { const delta = chunk[i + 1].pitch - chunk[i].pitch; const randomized = randomizeDelta(delta, chunk[i + 1].velocity >= ACCENT_VELOCITY, random); deltas.push(randomized); path.push(path[path.length - 1] + randomized); }
-    candles.push({ index: index / CANDLE_SIZE, notes: chunk, path, open: 0, high: Math.max(...path), low: Math.min(...path), close: path[path.length - 1] });
+function buildCandles(notes, seed, candleSize = state.piece.candleSize) {
+  const random = seededRandom(seed);
+  notes = selectFormationNotes(notes, random);
+  const candles = [];
+  for (let index = 0; index + candleSize <= notes.length; index += candleSize) {
+    const chunk = notes.slice(index, index + candleSize), path = [0], deltas = [];
+    for (let i = 0; i < candleSize; i++) {
+      const previousNote = i === 0 ? notes[index - 1] : chunk[i - 1];
+      const delta = previousNote ? chunk[i].pitch - previousNote.pitch : 0;
+      deltas.push(randomizeDelta(delta, chunk[i].velocity >= ACCENT_VELOCITY, random));
+    }
+    deltas[Math.floor(random() * candleSize)] = 0;
+    for (const delta of deltas) path.push(path[path.length - 1] + delta);
+    candles.push({ index: index / candleSize, notes: chunk, path, open: 0, high: Math.max(...path), low: Math.min(...path), close: path[path.length - 1] });
   }
   let previousClose = 0;
   for (const candle of candles) { const offset = previousClose - candle.path[0]; candle.path = candle.path.map(value => value + offset); candle.open = candle.path[0]; candle.high = Math.max(...candle.path); candle.low = Math.min(...candle.path); candle.close = candle.path[candle.path.length - 1]; previousClose = candle.close; }
@@ -55,33 +98,122 @@ function buildCandles(notes, seed) {
 }
 
 function partialCandle(candle, time) {
-  const times = candle.notes.map(note => note.time); if (time <= times[0]) return { ...candle, path: [candle.open], high: candle.open, low: candle.open, close: candle.open };
-  let index = Math.max(0, Math.min(candle.path.length - 1, times.findIndex(value => value > time) - 1)); if (index < 0) index = candle.path.length - 1; const path = candle.path.slice(0, index + 1);
-  if (index < candle.path.length - 1 && time < times[times.length - 1]) { const fraction = Math.max(0, Math.min(1, (time - times[index]) / (times[index + 1] - times[index]))); path.push(path[path.length - 1] + fraction * (candle.path[index + 1] - candle.path[index])); }
+  const times = candle.notes.map(note => note.time); if (time < times[0]) return { ...candle, path: [candle.open], high: candle.open, low: candle.open, close: candle.open };
+  const nextNoteIndex = times.findIndex(value => value > time);
+  const completedNoteCount = nextNoteIndex < 0 ? times.length : nextNoteIndex;
+  const path = candle.path.slice(0, completedNoteCount + 1);
+  if (completedNoteCount < times.length && completedNoteCount > 0) {
+    const startTime = times[completedNoteCount - 1];
+    const endTime = times[completedNoteCount];
+    if (endTime > startTime) {
+      const fraction = Math.max(0, Math.min(1, (time - startTime) / (endTime - startTime)));
+      path.push(path[path.length - 1] + fraction * (candle.path[completedNoteCount + 1] - candle.path[completedNoteCount]));
+    }
+  }
   return { ...candle, path, high: Math.max(...path), low: Math.min(...path), close: path[path.length - 1] };
 }
 
 function resizeCanvas() { const rect = canvas.getBoundingClientRect(), ratio = window.devicePixelRatio || 1; canvas.width = rect.width * ratio; canvas.height = rect.height * ratio; ctx.setTransform(ratio, 0, 0, ratio, 0, 0); draw(); }
 function draw() {
   const width = canvas.clientWidth, height = canvas.clientHeight; ctx.clearRect(0, 0, width, height); if (!state.candles.length) return;
-  const values = state.candles.flatMap(candle => [candle.low, candle.high]), min = Math.min(...values), max = Math.max(...values), margin = Math.max(2, (max - min) * .1), y = value => height - 28 - ((value - (min - margin)) / (max - min + margin * 2)) * (height - 52), x = index => 38 + index * ((width - 58) / Math.max(1, state.candles.length));
+  const values = state.candles.flatMap(candle => [candle.low, candle.high]), dataMin = Math.min(...values), dataMax = Math.max(...values), dataRange = Math.max(2, (dataMax - dataMin) * 1.1), center = state.yCenter ?? (dataMin + dataMax) / 2, visibleRange = dataRange / state.yZoom, min = center - visibleRange / 2, max = center + visibleRange / 2, plotWidth = width - 58, slot = plotWidth / Math.max(1, state.xCount), y = value => height - 28 - ((value - min) / visibleRange) * (height - 52), x = index => 38 + (index - state.xStart + 0.5) * slot;
   ctx.strokeStyle = '#d4d3c9'; ctx.lineWidth = 1; ctx.font = '10px DM Mono, monospace'; ctx.fillStyle = '#7a8177';
-  for (let i = 0; i < 5; i++) { const value = min - margin + ((max - min + margin * 2) * i / 4); const py = y(value); ctx.beginPath(); ctx.moveTo(38, py); ctx.lineTo(width - 10, py); ctx.stroke(); ctx.fillText(value.toFixed(1), 3, py - 4); }
-  const activeIndex = Math.max(0, Math.min(state.candles.length - 1, Math.floor(state.notes.findIndex(note => note.time > state.time) / CANDLE_SIZE))); const active = partialCandle(state.candles[activeIndex], state.time); const completed = state.time >= state.candles[activeIndex].notes.at(-1).time;
-  state.candles.forEach((candle, index) => { if (index > activeIndex || (index === activeIndex && !completed)) return; const color = candle.close >= candle.open ? '#315d48' : '#b85c45'; drawCandle(candle, index, color, x, y); });
-  if (!completed) drawCandle(active, activeIndex, active.close >= active.open ? '#315d48' : '#b85c45', x, y);
+  for (let i = 0; i < 5; i++) { const value = min + (visibleRange * i / 4); const py = y(value); ctx.beginPath(); ctx.moveTo(38, py); ctx.lineTo(width - 10, py); ctx.stroke(); ctx.fillText(value.toFixed(1), 3, py - 4); }
+  const nextNoteIndex = state.chartNotes.findIndex(note => note.time > state.time);
+  const consumedNoteCount = nextNoteIndex < 0 ? state.chartNotes.length : nextNoteIndex;
+  const activeIndex = Math.max(0, Math.min(state.candles.length - 1, Math.floor(consumedNoteCount / state.piece.candleSize)));
+  const active = partialCandle(state.candles[activeIndex], state.time); const completed = state.time >= state.candles[activeIndex].notes.at(-1).time;
+  state.candles.forEach((candle, index) => { if (index > activeIndex || (index === activeIndex && !completed) || index < state.xStart - 1 || index > state.xStart + state.xCount + 1) return; const color = candle.close >= candle.open ? '#315d48' : '#b85c45'; drawCandle(candle, index, color, x, y, Math.min(18, Math.max(1, slot * 0.62))); });
+  if (!completed) drawCandle(active, activeIndex, active.close >= active.open ? '#315d48' : '#b85c45', x, y, Math.min(18, Math.max(1, slot * 0.62)));
   const start = state.candles[activeIndex].notes[0].time, end = state.candles[activeIndex].notes.at(-1).time, progress = end > start ? Math.max(0, Math.min(1, (state.time - start) / (end - start))) : 0, playX = x(activeIndex + progress);
   ctx.strokeStyle = '#c39141'; ctx.setLineDash([2, 5]); ctx.beginPath(); ctx.moveTo(playX, 0); ctx.lineTo(playX, height - 28); ctx.stroke(); ctx.setLineDash([]);
   updateReadout(active, activeIndex); $('measureLabel').textContent = `MEASURE ${String(Math.floor(activeIndex / 2) + 1).padStart(2, '0')} / CANDLE ${String(activeIndex % 2 + 1).padStart(2, '0')}`;
 }
-function drawCandle(candle, index, color, x, y) { const px = x(index), open = y(candle.open), close = y(candle.close), high = y(candle.high), low = y(candle.low); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(px, high); ctx.lineTo(px, low); ctx.stroke(); ctx.globalAlpha = .84; ctx.fillRect(px - 5, Math.min(open, close), 10, Math.max(2, Math.abs(close - open))); ctx.globalAlpha = 1; }
+function drawCandle(candle, index, color, x, y, bodyWidth) { const px = x(index), open = y(candle.open), close = y(candle.close), high = y(candle.high), low = y(candle.low); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(px, high); ctx.lineTo(px, low); ctx.stroke(); ctx.globalAlpha = .84; ctx.fillRect(px - bodyWidth / 2, Math.min(open, close), bodyWidth, Math.max(2, Math.abs(close - open))); ctx.globalAlpha = 1; }
 function updateReadout(candle) { $('openValue').textContent = candle.open.toFixed(2); $('highValue').textContent = candle.high.toFixed(2); $('lowValue').textContent = candle.low.toFixed(2); $('closeValue').textContent = candle.close.toFixed(2); }
 function formatTime(seconds) { return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`; }
 
+function zoomHorizontally(event) {
+  if (!state.candles.length) return;
+  event.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const plotWidth = rect.width - 58;
+  const pointerRatio = Math.max(0, Math.min(1, (event.clientX - rect.left - 38) / plotWidth));
+  const pointerIndex = state.xStart + pointerRatio * state.xCount;
+  const zoomFactor = Math.exp(event.deltaY * 0.0015);
+  const nextCount = Math.max(8, Math.min(state.candles.length, state.xCount * zoomFactor));
+  state.xStart = Math.max(0, Math.min(state.candles.length - nextCount, pointerIndex - pointerRatio * nextCount));
+  state.xCount = nextCount;
+  draw();
+}
+
+function beginYAxisDrag(event) {
+  if (event.offsetX > 38) return;
+  event.preventDefault();
+  canvas.setPointerCapture(event.pointerId);
+  state.dragY = { pointerId: event.pointerId, startY: event.clientY, startZoom: state.yZoom };
+  canvas.classList.add('dragging-y');
+}
+
+function dragYAxis(event) {
+  if (!state.dragY || event.pointerId !== state.dragY.pointerId) return;
+  const zoom = state.dragY.startZoom * Math.exp((state.dragY.startY - event.clientY) * 0.008);
+  state.yZoom = Math.max(0.35, Math.min(16, zoom));
+  draw();
+}
+
+function endYAxisDrag(event) {
+  if (!state.dragY || event.pointerId !== state.dragY.pointerId) return;
+  canvas.releasePointerCapture(event.pointerId);
+  state.dragY = null;
+  canvas.classList.remove('dragging-y');
+}
+
+function beginChartDrag(event) {
+  if (event.offsetX <= 38 || !state.candles.length) return;
+  event.preventDefault();
+  canvas.setPointerCapture(event.pointerId);
+  const values = state.candles.flatMap(candle => [candle.low, candle.high]);
+  const dataMin = Math.min(...values);
+  const dataMax = Math.max(...values);
+  state.dragX = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startStart: state.xStart, startCenter: state.yCenter ?? (dataMin + dataMax) / 2 };
+  canvas.classList.add('dragging-x');
+}
+
+function dragChart(event) {
+  if (!state.dragX || event.pointerId !== state.dragX.pointerId) return;
+  const plotWidth = canvas.clientWidth - 58;
+  const indexDelta = (state.dragX.startX - event.clientX) / plotWidth * state.xCount;
+  state.xStart = Math.max(0, Math.min(state.candles.length - state.xCount, state.dragX.startStart + indexDelta));
+  const plotHeight = canvas.clientHeight - 52;
+  const values = state.candles.flatMap(candle => [candle.low, candle.high]);
+  const dataRange = Math.max(2, (Math.max(...values) - Math.min(...values)) * 1.1);
+  const visibleRange = dataRange / state.yZoom;
+  state.yCenter = state.dragX.startCenter + (event.clientY - state.dragX.startY) / plotHeight * visibleRange;
+  draw();
+}
+
+function endChartDrag(event) {
+  if (!state.dragX || event.pointerId !== state.dragX.pointerId) return;
+  canvas.releasePointerCapture(event.pointerId);
+  state.dragX = null;
+  canvas.classList.remove('dragging-x');
+}
+
+function getLowRegisterFactor(pitch) {
+  return Math.max(0, Math.min(1, (FULL_VOLUME_PITCH - pitch) / (FULL_VOLUME_PITCH - LOW_REGISTER_PITCH)));
+}
+
 function createPianoVoice(note, startTime) {
+  if (note.silent) return;
   const context = state.audio;
   const frequency = 440 * Math.pow(2, (note.pitch - 69) / 12);
-  const loudness = Math.min(0.045, 0.012 + note.velocity / 3600);
+  const lowRegisterFactor = getLowRegisterFactor(note.pitch);
+  const volumeMultiplier = Math.pow(10, (lowRegisterFactor * LOW_REGISTER_BOOST_DB) / 20);
+  const sustain = (1.8 + lowRegisterFactor * LOW_REGISTER_EXTRA_SUSTAIN) * SUSTAIN_MULTIPLIER;
+  const normalizedVelocity = Math.max(0, Math.min(1, note.velocity / 127));
+  const velocityGain = VELOCITY_FLOOR + (1 - VELOCITY_FLOOR) * Math.pow(normalizedVelocity, VELOCITY_CURVE);
+  const loudness = 0.047 * velocityGain * volumeMultiplier;
   const output = context.createGain();
   const filter = context.createBiquadFilter();
   filter.type = 'lowpass';
@@ -89,8 +221,8 @@ function createPianoVoice(note, startTime) {
   filter.Q.value = 0.7;
   output.gain.setValueAtTime(0.0001, startTime);
   output.gain.exponentialRampToValueAtTime(loudness, startTime + 0.006);
-  output.gain.exponentialRampToValueAtTime(loudness * 0.32, startTime + 0.32);
-  output.gain.exponentialRampToValueAtTime(0.0001, startTime + 1.8);
+  output.gain.exponentialRampToValueAtTime(loudness * 0.32, startTime + sustain * 0.18);
+  output.gain.exponentialRampToValueAtTime(0.0001, startTime + sustain);
   filter.connect(output).connect(context.destination);
 
   const partials = [
@@ -107,7 +239,7 @@ function createPianoVoice(note, startTime) {
     partialGain.gain.value = level;
     oscillator.connect(partialGain).connect(filter);
     oscillator.start(startTime);
-    oscillator.stop(startTime + 1.85);
+    oscillator.stop(startTime + sustain + 0.05);
   }
 
   const hammer = context.createBufferSource();
@@ -116,7 +248,7 @@ function createPianoVoice(note, startTime) {
   for (let i = 0; i < noiseData.length; i += 1) noiseData[i] = (Math.random() * 2 - 1) * (1 - i / noiseData.length);
   hammer.buffer = noise;
   const hammerGain = context.createGain();
-  hammerGain.gain.setValueAtTime(Math.min(0.018, note.velocity / 8000), startTime);
+  hammerGain.gain.setValueAtTime(0.018 * velocityGain, startTime);
   hammerGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.035);
   hammer.connect(hammerGain).connect(filter);
   hammer.start(startTime);
@@ -125,7 +257,8 @@ function createPianoVoice(note, startTime) {
 function scheduleAudioNotes() {
   if (!state.audio) return;
   const contextTime = state.audio.currentTime;
-  const scheduledUntil = state.time + AUDIO_LOOKAHEAD * state.speed;
+  const audioElapsed = Math.max(0, contextTime - state.audioStart);
+  const scheduledUntil = Math.min(state.duration, state.audioOrigin + (audioElapsed + AUDIO_LOOKAHEAD) * state.speed);
   while (state.audioNoteIndex < state.notes.length && state.notes[state.audioNoteIndex].time <= scheduledUntil) {
     const note = state.notes[state.audioNoteIndex];
     const startTime = state.audioStart + (note.time - state.audioOrigin) / state.speed;
@@ -143,13 +276,64 @@ function setupAudio() {
   scheduleAudioNotes();
 }
 
-function animate(timestamp) {
-  if (!state.lastFrame) state.lastFrame = timestamp;
+function resetChartPan() {
+  state.xStart = 0;
+  state.xCount = Math.max(8, state.candles.length / 3);
+  state.yCenter = null;
+}
+
+function resetChartToFullView() {
+  state.xStart = 0;
+  state.xCount = Math.max(1, state.candles.length);
+  state.yZoom = 1;
+  state.yCenter = null;
+}
+
+async function loadPiece(pieceKey) {
+  const piece = PIECES[pieceKey];
+  state.playing = false;
+  if (state.audio) state.audio.close();
+  state.audio = null;
+  state.time = 0;
+  state.pieceKey = pieceKey;
+  state.piece = piece;
+  state.notes = [];
+  state.chartNotes = [];
+  state.candles = [];
+  resetChartPan();
+  $('statusLabel').textContent = 'LOADING';
+
+  try {
+    const response = await fetch(piece.file);
+    if (!response.ok) throw new Error(`Unable to load ${piece.file}`);
+    state.notes = applyPieceSpecificAudio(parseMidi(await response.arrayBuffer()), piece);
+    state.chartNotes = selectFormationNotes(state.notes, seededRandom(state.seed));
+    state.duration = state.notes.at(-1).time;
+    state.candles = buildCandles(state.notes, state.seed, piece.candleSize);
+    resetChartPan();
+    $('timeline').value = 0;
+    $('timeline').max = state.duration;
+    $('noteCount').textContent = `${state.notes.length} NOTES / ${state.candles.length} CANDLES`;
+    $('statusLabel').textContent = 'READY';
+    resizeCanvas();
+  } catch (error) {
+    state.duration = 0;
+    $('statusLabel').textContent = 'MIDI NOT FOUND';
+    $('noteCount').textContent = 'ADD MIDI BESIDE PIECES';
+    draw();
+  }
+}
+
+function animate() {
   if (state.playing) {
-    state.time = Math.min(state.duration, state.time + (timestamp - state.lastFrame) / 1000 * state.speed);
+    if (state.audio) {
+      state.time = Math.min(
+        state.duration,
+        state.audioOrigin + Math.max(0, state.audio.currentTime - state.audioStart) * state.speed,
+      );
+    }
     scheduleAudioNotes();
   }
-  state.lastFrame = timestamp;
   $('timeline').value = state.time;
   $('timeLabel').textContent = `${formatTime(state.time)} / ${formatTime(state.duration)}`;
   $('statusLabel').textContent = state.time >= state.duration ? 'FINISHED' : state.playing ? 'PLAYING' : 'PAUSED';
@@ -159,13 +343,21 @@ function animate(timestamp) {
 }
 
 function play() {
-  if (state.time >= state.duration) state.time = 0;
+  if (state.time >= state.duration) {
+    state.time = 0;
+    resetChartPan();
+  }
   if (!state.audio) setupAudio();
-  state.audio.resume();
+  state.audio.resume().then(() => {
+    state.audioOrigin = state.time;
+    state.audioStart = state.audio.currentTime + 0.04;
+    state.audioNoteIndex = state.notes.findIndex(note => note.time >= state.time);
+    if (state.audioNoteIndex < 0) state.audioNoteIndex = state.notes.length;
+    scheduleAudioNotes();
+  });
   state.playing = true;
   state.paused = false;
   cancelAnimationFrame(state.raf);
-  state.lastFrame = 0;
   state.raf = requestAnimationFrame(animate);
 }
 
@@ -180,11 +372,41 @@ function pause() {
 function restart() {
   state.playing = false;
   state.time = 0;
+  resetChartPan();
   if (state.audio) state.audio.close();
   state.audio = null;
   draw();
 }
 
-$('playButton').onclick = play; $('pauseButton').onclick = pause; $('restartButton').onclick = restart; $('finishButton').onclick = () => { state.playing = false; state.time = state.duration; draw(); }; $('timeline').oninput = event => { state.time = Number(event.target.value); if (state.audio) state.audio.close(); state.audio = null; draw(); }; $('speed').oninput = event => { state.speed = Number(event.target.value); $('speedValue').textContent = `${state.speed.toFixed(2)}x`; }; $('seed').onchange = event => { state.seed = Number(event.target.value) || 1; state.candles = buildCandles(state.notes, state.seed); restart(); };
+function finishPlayback() {
+  state.playing = false;
+  state.time = state.duration;
+  resetChartToFullView();
+  if (state.audio) state.audio.close();
+  state.audio = null;
+  $('timeline').value = state.time;
+  $('timeLabel').textContent = `${formatTime(state.time)} / ${formatTime(state.duration)}`;
+  $('statusLabel').textContent = 'FINISHED';
+  draw();
+}
+
+$('playButton').onclick = play; $('pauseButton').onclick = pause; $('restartButton').onclick = restart; $('finishButton').onclick = finishPlayback; $('pieceSelect').onchange = event => loadPiece(event.target.value); $('timeline').oninput = event => { state.time = Number(event.target.value); if (state.audio) state.audio.close(); state.audio = null; draw(); }; $('speed').oninput = event => { state.speed = Number(event.target.value); $('speedValue').textContent = `${state.speed.toFixed(2)}x`; }; $('seed').onchange = event => { state.seed = Number(event.target.value) || 1; state.chartNotes = selectFormationNotes(state.notes, seededRandom(state.seed)); state.candles = buildCandles(state.notes, state.seed, state.piece.candleSize); restart(); };
+canvas.addEventListener('wheel', zoomHorizontally, { passive: false });
+canvas.addEventListener('pointerdown', event => {
+  if (event.offsetX <= 38) beginYAxisDrag(event);
+  else beginChartDrag(event);
+});
+canvas.addEventListener('pointermove', event => {
+  if (state.dragY) dragYAxis(event);
+  else dragChart(event);
+});
+canvas.addEventListener('pointerup', event => {
+  endYAxisDrag(event);
+  endChartDrag(event);
+});
+canvas.addEventListener('pointercancel', event => {
+  endYAxisDrag(event);
+  endChartDrag(event);
+});
 window.onresize = resizeCanvas; window.onkeydown = event => { if (event.target.tagName === 'INPUT') return; if (event.code === 'Space') { event.preventDefault(); state.playing ? pause() : play(); } if (event.key.toLowerCase() === 'r') restart(); if (event.key === 'ArrowRight') { state.time = state.duration; draw(); } };
-fetch(MIDI_URL).then(response => response.arrayBuffer()).then(buffer => { state.notes = parseMidi(buffer); state.duration = state.notes.at(-1).time; state.candles = buildCandles(state.notes, state.seed); $('noteCount').textContent = `${state.notes.length} NOTES / ${state.candles.length} CANDLES`; $('timeline').max = state.duration; resizeCanvas(); draw(); }).catch(() => { $('statusLabel').textContent = 'MIDI NOT FOUND'; $('noteCount').textContent = 'ADD MIDI BESIDE PAGE'; });
+loadPiece('CTNRS');

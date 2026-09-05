@@ -22,10 +22,14 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 82px); font-weight: 500; line-height
 .statement { max-width: 360px; margin: 0 0 2px; color: var(--muted); font-size: 14px; line-height: 1.6; }
 .workbench { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 32px; padding: 32px 0; flex: 1; }
 .chart-frame { min-width: 0; display: flex; flex-direction: column; background: var(--chart); border: 1px solid var(--line); padding: 18px 20px 14px; box-shadow: 12px 12px 0 rgba(50, 56, 47, .07); }
-.chart-meta, .chart-foot { color: var(--muted); display: flex; justify-content: space-between; }
+.chart-meta, .chart-foot { color: var(--muted); display: flex; justify-content: space-between; align-items: center; }
 .chart-meta { padding-bottom: 14px; color: var(--ink); }
+.piece-picker { display: flex; align-items: center; gap: 9px; font: 500 11px 'DM Mono', monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.piece-picker select { border: 1px solid var(--line); background: transparent; color: var(--ink); padding: 6px 24px 6px 8px; font: 500 11px 'DM Mono', monospace; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
 #statusLabel { color: var(--gold); }
-canvas { display: block; width: 100%; height: min(58vh, 580px); min-height: 330px; }
+canvas { display: block; width: 100%; height: min(58vh, 580px); min-height: 330px; cursor: crosshair; touch-action: none; }
+canvas.dragging-y { cursor: ns-resize; }
+canvas.dragging-x { cursor: grabbing; }
 .chart-foot { padding-top: 12px; border-top: 1px solid var(--line); }
 .controls { display: flex; flex-direction: column; gap: 28px; padding-top: 3px; }
 .control-block { border-bottom: 1px solid var(--line); padding-bottom: 25px; }
