@@ -1,4 +1,4 @@
-const ACCENT_VELOCITY = 120;
+const ACCENT_VELOCITY = 95;
 const UPDATE_INTERVAL = 50;
 const AUDIO_LOOKAHEAD = 0.35;
 const PIECES = {
