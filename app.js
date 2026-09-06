@@ -152,12 +152,14 @@ function draw() {
   const plotBottom = height - 28;
   const plotLeft = 38;
   const plotRight = width - 10;
+  const candleGlow = document.body.classList.contains('night');
   ctx.save();
   ctx.beginPath();
   ctx.rect(plotLeft, plotTop, plotRight - plotLeft, plotBottom - plotTop);
   ctx.clip();
-  state.candles.forEach((candle, index) => { if (index > activeIndex || (index === activeIndex && !completed) || index < state.xStart - 1 || index > state.xStart + state.xCount + 1) return; const color = candle.close >= candle.open ? bullishColor : bearishColor; drawCandle(candle, index, color, x, y, Math.min(18, Math.max(1, slot * 0.62))); });
-  if (!completed) drawCandle(active, activeIndex, active.close >= active.open ? bullishColor : bearishColor, x, y, Math.min(18, Math.max(1, slot * 0.62)));
+  state.candles.forEach((candle, index) => { if (index > activeIndex || (index === activeIndex && !completed) || index < state.xStart - 1 || index > state.xStart + state.xCount + 1) return; const color = candle.close >= candle.open ? bullishColor : bearishColor; drawCandle(candle, index, color, x, y, Math.min(18, Math.max(1, slot * 0.62)), candleGlow); });
+  if (!completed) drawCandle(active, activeIndex, active.close >= active.open ? bullishColor : bearishColor, x, y, Math.min(18, Math.max(1, slot * 0.62)), candleGlow);
+  ctx.shadowBlur = 0;
   const start = state.candles[activeIndex].notes[0].time, end = state.candles[activeIndex].notes.at(-1).time, progress = end > start ? Math.max(0, Math.min(1, (state.time - start) / (end - start))) : 0, playX = x(activeIndex + progress);
   const currentPrice = active.close;
   const priceY = y(currentPrice);
@@ -195,7 +197,7 @@ function draw() {
   const selectedColor = selectedCandle.close >= selectedCandle.open ? bullishColor : bearishColor;
   updateReadout(selectedCandle, selectedColor); updateQuantitativeMetrics(activeIndex, active); $('measureLabel').textContent = `MEASURE ${String(Math.floor(selectedIndex / 2) + 1).padStart(2, '0')} / CANDLE ${String(selectedIndex % 2 + 1).padStart(2, '0')}`;
 }
-function drawCandle(candle, index, color, x, y, bodyWidth) { const px = x(index), open = y(candle.open), close = y(candle.close), high = y(candle.high), low = y(candle.low), glowing = document.body.classList.contains('night'); ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2; if (glowing) { ctx.shadowColor = color; ctx.shadowBlur = 9; } ctx.beginPath(); ctx.moveTo(px, high); ctx.lineTo(px, low); ctx.stroke(); ctx.globalAlpha = .84; ctx.fillRect(px - bodyWidth / 2, Math.min(open, close), bodyWidth, Math.max(2, Math.abs(close - open))); ctx.restore(); }
+function drawCandle(candle, index, color, x, y, bodyWidth, glowing) { const px = x(index), open = y(candle.open), close = y(candle.close), high = y(candle.high), low = y(candle.low); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2; if (glowing) { ctx.shadowColor = color; ctx.shadowBlur = 6; } else ctx.shadowBlur = 0; ctx.beginPath(); ctx.moveTo(px, high); ctx.lineTo(px, low); ctx.stroke(); ctx.globalAlpha = .84; ctx.fillRect(px - bodyWidth / 2, Math.min(open, close), bodyWidth, Math.max(2, Math.abs(close - open))); ctx.globalAlpha = 1; }
 function updateReadout(candle, color) { const readout = $('openValue').closest('.ohlc-readout'); readout.style.color = color; readout.classList.add('candle-color'); $('openValue').textContent = candle.open.toFixed(2); $('highValue').textContent = candle.high.toFixed(2); $('lowValue').textContent = candle.low.toFixed(2); $('closeValue').textContent = candle.close.toFixed(2); }
 function updateQuantitativeMetrics(activeIndex, activeCandle) {
   const start = Math.max(0, Math.ceil(state.xStart - 0.5));
@@ -282,10 +284,12 @@ function beginChartDrag(event) {
   if (localX <= 38 || !state.candles.length) return;
   event.preventDefault();
   canvas.setPointerCapture(event.pointerId);
-  const values = state.candles.flatMap(candle => [candle.low, candle.high]);
+  const scopedCandles = state.candles.slice(Math.floor(state.xStart), Math.ceil(state.xStart + state.xCount));
+  const values = (scopedCandles.length ? scopedCandles : state.candles).flatMap(candle => [candle.low, candle.high]);
   const dataMin = Math.min(...values);
   const dataMax = Math.max(...values);
-  state.dragX = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startStart: state.xStart, startCenter: state.yCenter ?? (dataMin + dataMax) / 2 };
+  const dataRange = Math.max(2, (dataMax - dataMin) * 1.1);
+  state.dragX = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startStart: state.xStart, startCenter: state.yCenter ?? (dataMin + dataMax) / 2, visibleRange: dataRange / state.yZoom };
   canvas.classList.add('dragging-x');
 }
 
@@ -295,10 +299,7 @@ function dragChart(event) {
   const indexDelta = (state.dragX.startX - event.clientX) / plotWidth * state.xCount * state.panSensitivity;
   state.xStart = Math.max(0, Math.min(state.candles.length - state.xCount, state.dragX.startStart + indexDelta));
   const plotHeight = canvas.clientHeight - 52;
-  const values = state.candles.flatMap(candle => [candle.low, candle.high]);
-  const dataRange = Math.max(2, (Math.max(...values) - Math.min(...values)) * 1.1);
-  const visibleRange = dataRange / state.yZoom;
-  state.yCenter = state.dragX.startCenter + (event.clientY - state.dragX.startY) / plotHeight * visibleRange * state.panSensitivity;
+  state.yCenter = state.dragX.startCenter + (event.clientY - state.dragX.startY) / plotHeight * state.dragX.visibleRange * state.panSensitivity;
   draw();
 }
 

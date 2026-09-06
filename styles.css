@@ -24,8 +24,8 @@ body.night::before { opacity: .08; }
   display: flex;
   flex-direction: column; /* Stack children vertically */
   align-items: flex-start;
-  gap: 16px; /* Spacing between title and statement */
-  padding-bottom: 52px;
+  gap: 28px;
+  padding-bottom: 24px;
   border-bottom: 1px solid var(--line);
 }
 .section-label, .chart-meta, footer, .chart-foot { font: 500 11px 'DM Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }
