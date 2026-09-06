@@ -161,7 +161,10 @@ function draw() {
   const start = state.candles[activeIndex].notes[0].time, end = state.candles[activeIndex].notes.at(-1).time, progress = end > start ? Math.max(0, Math.min(1, (state.time - start) / (end - start))) : 0, playX = x(activeIndex + progress);
   const currentPrice = active.close;
   const priceY = y(currentPrice);
-  ctx.strokeStyle = '#c39141';
+  const gold = theme.getPropertyValue('--gold').trim();
+  const glowing = document.body.classList.contains('night');
+  if (glowing) { ctx.shadowColor = gold; ctx.shadowBlur = 9; }
+  ctx.strokeStyle = gold;
   ctx.setLineDash([2, 5]);
 
   // Only draw the vertical play line if it is within the active chart area (x >= 38)
@@ -184,14 +187,15 @@ function draw() {
   const priceLabel = currentPrice.toFixed(2);
   const priceLabelWidth = Math.max(38, ctx.measureText(priceLabel).width + 10);
   const labelY = Math.max(9, Math.min(height - 9, priceY));
-  ctx.fillStyle = '#c39141'; ctx.fillRect(0, labelY - 9, priceLabelWidth, 18);
   ctx.save();
+  if (glowing) { ctx.shadowColor = gold; ctx.shadowBlur = 9; }
+  ctx.fillStyle = gold; ctx.fillRect(0, labelY - 9, priceLabelWidth, 18);
   ctx.fillStyle = theme.getPropertyValue('--paper').trim(); ctx.textAlign = 'left'; ctx.fillText(priceLabel, 5, labelY + 4); ctx.textAlign = 'left';
   ctx.restore();
   const selectedColor = selectedCandle.close >= selectedCandle.open ? bullishColor : bearishColor;
   updateReadout(selectedCandle, selectedColor); updateQuantitativeMetrics(activeIndex, active); $('measureLabel').textContent = `MEASURE ${String(Math.floor(selectedIndex / 2) + 1).padStart(2, '0')} / CANDLE ${String(selectedIndex % 2 + 1).padStart(2, '0')}`;
 }
-function drawCandle(candle, index, color, x, y, bodyWidth) { const px = x(index), open = y(candle.open), close = y(candle.close), high = y(candle.high), low = y(candle.low); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(px, high); ctx.lineTo(px, low); ctx.stroke(); ctx.globalAlpha = .84; ctx.fillRect(px - bodyWidth / 2, Math.min(open, close), bodyWidth, Math.max(2, Math.abs(close - open))); ctx.globalAlpha = 1; }
+function drawCandle(candle, index, color, x, y, bodyWidth) { const px = x(index), open = y(candle.open), close = y(candle.close), high = y(candle.high), low = y(candle.low), glowing = document.body.classList.contains('night'); ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2; if (glowing) { ctx.shadowColor = color; ctx.shadowBlur = 9; } ctx.beginPath(); ctx.moveTo(px, high); ctx.lineTo(px, low); ctx.stroke(); ctx.globalAlpha = .84; ctx.fillRect(px - bodyWidth / 2, Math.min(open, close), bodyWidth, Math.max(2, Math.abs(close - open))); ctx.restore(); }
 function updateReadout(candle, color) { const readout = $('openValue').closest('.ohlc-readout'); readout.style.color = color; readout.classList.add('candle-color'); $('openValue').textContent = candle.open.toFixed(2); $('highValue').textContent = candle.high.toFixed(2); $('lowValue').textContent = candle.low.toFixed(2); $('closeValue').textContent = candle.close.toFixed(2); }
 function updateQuantitativeMetrics(activeIndex, activeCandle) {
   const start = Math.max(0, Math.ceil(state.xStart - 0.5));
@@ -202,20 +206,17 @@ function updateQuantitativeMetrics(activeIndex, activeCandle) {
   const closeChanges = closes.slice(1).map((close, index) => close - closes[index]);
   const averageChange = closeChanges.length ? closeChanges.reduce((sum, value) => sum + value, 0) / closeChanges.length : 0;
   const volatility = closeChanges.length ? Math.sqrt(closeChanges.reduce((sum, value) => sum + (value - averageChange) ** 2, 0) / closeChanges.length) : 0;
-  const scopedNotes = scopedCandles.flatMap((candle, index) => {
-    if (start + index !== activeIndex) return candle.notes;
-    return candle.notes.filter(note => note.time <= state.time);
-  });
-  const pitches = scopedNotes.map(note => note.pitch);
-  const pitchDeltas = pitches.slice(1).map((pitch, index) => Math.abs(pitch - pitches[index]));
-  const pitchDeltaAverage = pitchDeltas.length ? pitchDeltas.reduce((sum, value) => sum + value, 0) / pitchDeltas.length : 0;
+  const scopedRanges = scopedCandles.map((candle, index) => start + index === activeIndex ? activeCandle : candle);
+  const highestHigh = scopedRanges.length ? Math.max(...scopedRanges.map(candle => candle.high)) : 0;
+  const lowestLow = scopedRanges.length ? Math.min(...scopedRanges.map(candle => candle.low)) : 0;
+  const pitchDeltaRange = highestHigh - lowestLow;
   const period = 14;
   const recentChanges = closeChanges.slice(-period);
   const gains = recentChanges.filter(value => value > 0).reduce((sum, value) => sum + value, 0);
   const losses = recentChanges.filter(value => value < 0).reduce((sum, value) => sum - value, 0);
   const rsi = losses === 0 ? (gains === 0 ? 50 : 100) : 100 - (100 / (1 + gains / losses));
   $('volatilityValue').textContent = volatility.toFixed(2);
-  $('pitchDeltaAverageValue').textContent = `${pitchDeltaAverage.toFixed(2)} st`;
+  $('pitchDeltaAverageValue').textContent = `${pitchDeltaRange.toFixed(2)} st`;
   $('rsiValue').textContent = rsi.toFixed(2);
 }
 function formatTime(seconds) { return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`; }

@@ -13,7 +13,7 @@
   --chart: #ebe9e1;
 }
 :root { --paper: #f3f0e9; --ink: #202521; --muted: #7a8177; --line: #d4d3c9; --chart: #ebe9e1; }
-body.night { --paper: #000000; --ink: #f4f1e8; --muted: #969b92; --line: #505150; --chart: #363636; --bullish: #98fb2f; --bearish: #fb618d; }
+body.night { --paper: #000000; --ink: #f4f1e8; --muted: #969b92; --line: #505150; --chart: #363636; --bullish: #bafb74; --bearish: #fb98f8; --gold: #ffd35a; }
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; background: var(--paper); color: var(--ink); font-family: 'Space Grotesk', sans-serif; transition: background .25s, color .25s; }
@@ -83,6 +83,7 @@ button { border: 1px solid var(--ink); background: transparent; color: var(--ink
 button:hover, button:focus-visible { background: var(--ink); color: var(--paper); outline: none; }
 button.primary { background: var(--ink); color: var(--paper); }
 button.primary:hover { background: var(--green); border-color: var(--green); }
+body.night button.primary:hover { background: var(--bullish); border-color: var(--bullish); color: #101010; }
 .icon-button { font-size: 19px; line-height: 1; }
 .timeline { width: 100%; margin-top: 22px; accent-color: var(--gold); }
 .bar-control { display: flex; justify-content: space-between; align-items: baseline; margin-top: 16px; color: var(--muted); font: 500 10px 'DM Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }
