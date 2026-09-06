@@ -18,10 +18,24 @@ body { margin: 0; min-width: 320px; background: var(--paper); color: var(--ink);
 body::before { content: ''; position: fixed; inset: 0; pointer-events: none; opacity: .2; background-image: radial-gradient(#8b8d82 0.55px, transparent .55px); background-size: 8px 8px; }
 body.night::before { opacity: .08; }
 .shell { position: relative; max-width: 1440px; min-height: 100vh; margin: auto; padding: clamp(28px, 5vw, 72px); display: flex; flex-direction: column; }
-.masthead { display: flex; align-items: end; justify-content: space-between; gap: 40px; padding-bottom: 38px; border-bottom: 1px solid var(--line); }
+.masthead {
+  display: flex;
+  flex-direction: column; /* Stack children vertically */
+  align-items: flex-start;
+  gap: 16px; /* Spacing between title and statement */
+  padding-bottom: 25px;
+  border-bottom: 1px solid var(--line);
+}
 .section-label, .chart-meta, footer, .chart-foot { font: 500 11px 'DM Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }
 h1 { margin: 0; font-size: clamp(38px, 6vw, 82px); font-weight: 500; line-height: .92; letter-spacing: -.05em; }
-.statement { max-width: 360px; margin: 0 0 2px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.statement {
+  width: 100%;
+  max-width: none; /* Remove 360px width constraint to let it span full width */
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
 .workbench { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 32px; padding: 32px 0; flex: 1; }
 .chart-frame { position: relative; min-width: 0; display: flex; flex-direction: column; background: var(--chart); border: 1px solid var(--line); padding: 18px 20px 14px 29px;}
 .chart-meta, .chart-foot { color: var(--muted); display: flex; justify-content: space-between; align-items: center; }
