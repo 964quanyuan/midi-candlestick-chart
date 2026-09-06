@@ -184,7 +184,9 @@ function zoomHorizontally(event) {
 }
 
 function beginYAxisDrag(event) {
-  if (event.offsetX > 38) return;
+  const rect = canvas.getBoundingClientRect();
+  const localX = event.clientX - rect.left;
+  if (localX > 38) return;
   event.preventDefault();
   canvas.setPointerCapture(event.pointerId);
   state.dragY = { pointerId: event.pointerId, startY: event.clientY, startZoom: state.yZoom };
@@ -206,7 +208,9 @@ function endYAxisDrag(event) {
 }
 
 function beginChartDrag(event) {
-  if (event.offsetX <= 38 || !state.candles.length) return;
+  const rect = canvas.getBoundingClientRect();
+  const localX = event.clientX - rect.left;
+  if (localX <= 38 || !state.candles.length) return;
   event.preventDefault();
   canvas.setPointerCapture(event.pointerId);
   const values = state.candles.flatMap(candle => [candle.low, candle.high]);
@@ -430,10 +434,13 @@ function finishPlayback() {
 $('seed').value = state.seed; $('seedValue').textContent = state.seed;
 $('playButton').onclick = play; $('pauseButton').onclick = pause; $('restartButton').onclick = restart; $('finishButton').onclick = finishPlayback; $('pieceSelect').onchange = event => loadPiece(event.target.value); $('timeline').oninput = event => { state.time = Number(event.target.value); if (state.audio) state.audio.close(); state.audio = null; draw(); }; $('speed').oninput = event => { state.speed = Number(event.target.value); $('speedValue').textContent = `${state.speed.toFixed(2)}x`; }; $('seed').oninput = event => { const seed = Number.parseInt(event.target.value, 10); if (!Number.isNaN(seed)) $('seedValue').textContent = seed; }; $('seed').onchange = event => { const seed = Number.parseInt(event.target.value, 10); state.seed = Number.isNaN(seed) ? 1 : seed; $('seedValue').textContent = state.seed; state.chartNotes = selectFormationNotes(state.notes, seededRandom(state.seed)); state.candles = buildCandles(state.notes, state.seed, state.piece.candleSize); restart(); };
 const themeToggle = $('themeToggle');
-themeToggle.onclick = () => { const night = document.body.classList.toggle('night'); themeToggle.textContent = night ? 'Day mode' : 'Night mode'; themeToggle.setAttribute('aria-pressed', String(night)); draw(); };
+if (themeToggle) {
+  themeToggle.onclick = () => { const night = document.body.classList.toggle('night'); themeToggle.textContent = night ? 'Day mode' : 'Night mode'; themeToggle.setAttribute('aria-pressed', String(night)); draw(); };
+}
 canvas.addEventListener('wheel', zoomHorizontally, { passive: false });
 canvas.addEventListener('pointerdown', event => {
-  if (event.offsetX <= 38) beginYAxisDrag(event);
+  const rect = canvas.getBoundingClientRect();
+  if (event.clientX - rect.left <= 38) beginYAxisDrag(event);
   else beginChartDrag(event);
 });
 canvas.addEventListener('pointermove', event => {
