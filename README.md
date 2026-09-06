@@ -1,13 +1,4 @@
-# Catenaires web study
-
-A dependency-free browser translation of `candlestick.py`.
-
-Open `index.html` through a local server so the browser can fetch the MIDI file:
-
-```powershell
-python -m http.server 8000
-```
-
-Then visit http://localhost:8000/catenaires_web/ from the parent directory.
-
-The page preserves the Python program's six-note candle grouping, seeded pitch-delta randomization, accent handling, playback timing, and measure/candle progression. Browser audio is synthesized from the parsed MIDI note events with Web Audio.
+### Deliverable: [Piano Etude Trading Simulator](https://964quanyuan.github.io/piano-etude-trading-simulator/)
+I designed a system that translates several classical piano etudes into animated candlestick charts by treating consecutive MIDI pitch deltas as price movements, grouping notes into a candles with random deltas discarded to create organic trends, applying a velocity-sensitive randomization layer where accented notes receive a directionally amplified modifier, all synchronized to MIDI playback in real time.  
+  
+This project is makes the philosophical argument that composed classical/modernist etudes and financial markets are both pseudo-chaotic systems where underlying signal erupts unpredictably from a substrate of noise, both an amalgamation of human emotions and systematic principles, both defined by uncertainty in the future but sensibility in hindsight. This parallelism is visualized in real time by rendering one in the language of the other.
