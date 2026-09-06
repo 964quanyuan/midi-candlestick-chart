@@ -10,10 +10,10 @@
   <main class="shell">
     <header class="masthead">
       <div>
-        <h1>Signal in motion</h1>
+        <h2>Signal in motion</h2>
       </div>
       <p class="statement">Music compositions translated into the language of market: notes become price ticks and candles, and dynamics become volatility. 
-        This project is makes the philosophical argument that composed modernist music and financial markets are both pseudo-chaotic systems where underlying signal erupts from a substrate of noise, both an amalgamation of human emotions and systematic principles, both defined by uncertainty in the future but sensibility in hindsight. This parallelism is visualized in real time by rendering one in the language of the other.
+        This project makes the philosophical argument that composed modernist music and financial markets are both pseudo-chaotic systems where underlying signal erupts from a substrate of noise, both an amalgamation of human emotions and systematic principles, both defined by uncertainty in the future but clarity in hindsight. This parallelism is visualized in real time by rendering one in the language of the other.
       </p>
     </header>
 
@@ -32,8 +32,18 @@
         <span class="axis-label">cumulative semitone delta</span>
         <canvas id="chart" aria-label="Animated candlestick chart"></canvas>
         <div class="chart-foot">
-          <span id="timeLabel">00:00 / 00:00</span>
           <span id="measureLabel">MEASURE 01 / CANDLE 01</span>
+          <div class="ohlc-readout" aria-label="Open high low close">
+            <span>O <b id="openValue">0.00</b></span>
+            <span>H <b id="highValue">0.00</b></span>
+            <span>L <b id="lowValue">0.00</b></span>
+            <span>C <b id="closeValue">0.00</b></span>
+          </div>
+        </div>
+        <div class="quantitative-metrics">
+          <span>volatility <b id="volatilityValue">0.00</b></span>
+          <span>pitch delta average <b id="pitchDeltaAverageValue">0.00 st</b></span>
+          <span>relative strength index <b id="rsiValue">50.00</b></span>
         </div>
       </div>
 
@@ -46,29 +56,30 @@
             <button id="restartButton" class="icon-button" type="button" aria-label="Restart">↺</button>
             <button id="finishButton" class="icon-button" type="button" aria-label="Finish playback">››</button>
           </div>
+          <label class="bar-control" for="timeline">seek <output id="timeLabel">00:00 / 00:00</output></label>
           <input id="timeline" class="timeline" type="range" min="0" max="1" step="0.001" value="0" aria-label="Playback position">
+          <label class="bar-control" for="speed">speed <output id="speedValue">1.00x</output></label>
+          <input id="speed" class="speed-control" type="range" min="0.5" max="2" step="0.05" value="1" aria-label="Playback speed">
         </div>
 
+        <div class="control-block sound-controls">
+          <span class="section-label">Additional settings</span>
+          <label class="bar-control" for="attack">note attack <output id="attackValue">0.006s</output></label>
+          <input id="attack" type="range" min="0.001" max="0.03" step="0.001" value="0.006" aria-label="Attack">
+          <label class="bar-control" for="reverb">note reverb <output id="reverbValue">0%</output></label>
+          <input id="reverb" type="range" min="0" max="1" step="0.01" value="0" aria-label="Reverb">
+          <label class="bar-control" for="panSensitivity">pan sensitivity <output id="panSensitivityValue">1.00x</output></label>
+          <input id="panSensitivity" type="range" min="0.25" max="3" step="0.05" value="1" aria-label="Pan sensitivity">
+        </div>
         <div class="control-block settings">
-          <label for="seed">Random seed <output id="seedValue">42</output></label>
-          <input id="seed" type="number" value="42" step="1">
-          <label for="speed">Playback speed <output id="speedValue">1.00x</output></label>
-          <input id="speed" type="range" min="0.5" max="2" step="0.05" value="1">
-        </div>
-
-        <div class="readout">
-          <span class="section-label">Current candle</span>
-          <div class="readout-grid">
-            <span>open <b id="openValue">0.00</b></span>
-            <span>high <b id="highValue">0.00</b></span>
-            <span>low <b id="lowValue">0.00</b></span>
-            <span>close <b id="closeValue">0.00</b></span>
+          <div class="seed-control">
+            <label for="seed">Random seed</label>
+            <input id="seed" type="number" value="42" step="1">
           </div>
         </div>
         <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false">Night mode</button>
       </aside>
     </section>
-
     <footer>
       <span>LOCAL MIDI STUDY / 50MS FRAME</span>
       <span id="noteCount">Loading MIDI…</span>
