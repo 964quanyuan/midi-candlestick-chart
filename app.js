@@ -4,15 +4,24 @@ const AUDIO_LOOKAHEAD = 0.35;
 const PIECES = {
   CTNRS: { 
     ticker: 'CRTR: CTNRS', 
-    file: 'pieces/catenaires_sample.mid', 
+    file: 'pieces/catenaires.mid', 
     candleSize: 6,
+    notesPerMeasure: 12,
     title: 'Two Thoughts About the Piano, No. 2: Caténaires - Elliott Carter', 
     silenceFirst: true },
   WTRFLL: { 
     ticker: 'CHPN: WTRFLL', 
     file: 'pieces/op10-1.mid', 
     candleSize: 6, 
+    notesPerMeasure: 16,
     title: 'Étude Opus 10 No. 1, "Waterfall" - Frederic Chopin',
+    silenceFirst: false },
+  FFNT: {
+    ticker: 'SCRBN: FFNT',
+    file: 'pieces/op42-5.mid',
+    candleSize: 8,
+    notesPerMeasure: 24,
+    title: 'Étude Opus 42 No. 5, "Affanato" - Alexander Scriabin',
     silenceFirst: false },
 };
 const LOW_REGISTER_PITCH = 36;
@@ -71,6 +80,14 @@ function parseMidi(buffer) {
 function applyPieceSpecificAudio(notes, piece) {
   if (piece.silenceFirst && notes.length > 0) notes[0].silent = true;
   return notes;
+}
+
+function getMeasureAndCandle(index, piece = state.piece) {
+  const noteOffset = index * piece.candleSize;
+  const measure = Math.floor(noteOffset / piece.notesPerMeasure) + 1;
+  const withinMeasure = noteOffset % piece.notesPerMeasure;
+  const candleInMeasure = Math.floor(withinMeasure / piece.candleSize) + 1;
+  return { measure, candleInMeasure };
 }
 
 function selectFormationNotes(notes, random = Math.random) {
@@ -164,9 +181,11 @@ function draw() {
   const currentPrice = active.close;
   const priceY = y(currentPrice);
   const gold = theme.getPropertyValue('--gold').trim();
+  const white = '#f5f7ff';
+  const crosshairColor = document.body.classList.contains('night') ? white : gold;
   const glowing = document.body.classList.contains('night');
-  if (glowing) { ctx.shadowColor = gold; ctx.shadowBlur = 9; }
-  ctx.strokeStyle = gold;
+  if (glowing) { ctx.shadowColor = crosshairColor; ctx.shadowBlur = 9; }
+  ctx.strokeStyle = crosshairColor;
   ctx.setLineDash([2, 5]);
 
   // Only draw the vertical play line if it is within the active chart area (x >= 38)
@@ -190,12 +209,14 @@ function draw() {
   const priceLabelWidth = Math.max(38, ctx.measureText(priceLabel).width + 10);
   const labelY = Math.max(9, Math.min(height - 9, priceY));
   ctx.save();
-  if (glowing) { ctx.shadowColor = gold; ctx.shadowBlur = 9; }
-  ctx.fillStyle = gold; ctx.fillRect(0, labelY - 9, priceLabelWidth, 18);
+  if (glowing) { ctx.shadowColor = crosshairColor; ctx.shadowBlur = 9; }
+  ctx.fillStyle = crosshairColor; ctx.fillRect(0, labelY - 9, priceLabelWidth, 18);
   ctx.fillStyle = theme.getPropertyValue('--paper').trim(); ctx.textAlign = 'left'; ctx.fillText(priceLabel, 5, labelY + 4); ctx.textAlign = 'left';
   ctx.restore();
   const selectedColor = selectedCandle.close >= selectedCandle.open ? bullishColor : bearishColor;
-  updateReadout(selectedCandle, selectedColor); updateQuantitativeMetrics(activeIndex, active); $('measureLabel').textContent = `MEASURE ${String(Math.floor(selectedIndex / 2) + 1).padStart(2, '0')} / CANDLE ${String(selectedIndex % 2 + 1).padStart(2, '0')}`;
+  updateReadout(selectedCandle, selectedColor); updateQuantitativeMetrics(activeIndex, active);
+  const { measure, candleInMeasure } = getMeasureAndCandle(selectedIndex, state.piece);
+  $('measureLabel').textContent = `MEASURE ${String(measure).padStart(2, '0')} / CANDLE ${String(candleInMeasure).padStart(2, '0')}`;
 }
 function drawCandle(candle, index, color, x, y, bodyWidth, glowing) { const px = x(index), open = y(candle.open), close = y(candle.close), high = y(candle.high), low = y(candle.low); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2; if (glowing) { ctx.shadowColor = color; ctx.shadowBlur = 6; } else ctx.shadowBlur = 0; ctx.beginPath(); ctx.moveTo(px, high); ctx.lineTo(px, low); ctx.stroke(); ctx.globalAlpha = .84; ctx.fillRect(px - bodyWidth / 2, Math.min(open, close), bodyWidth, Math.max(2, Math.abs(close - open))); ctx.globalAlpha = 1; }
 function updateReadout(candle, color) { const readout = $('openValue').closest('.ohlc-readout'); readout.style.color = color; readout.classList.add('candle-color'); $('openValue').textContent = candle.open.toFixed(2); $('highValue').textContent = candle.high.toFixed(2); $('lowValue').textContent = candle.low.toFixed(2); $('closeValue').textContent = candle.close.toFixed(2); }
@@ -236,6 +257,13 @@ function updateHoveredCandle(event) {
   const nextNoteIndex = state.chartNotes.findIndex(note => note.time > state.time);
   const consumedNoteCount = nextNoteIndex < 0 ? state.chartNotes.length : nextNoteIndex;
   const activeIndex = Math.max(0, Math.min(state.candles.length - 1, Math.floor(consumedNoteCount / state.piece.candleSize)));
+  const visibleStart = Math.floor(state.xStart);
+  const visibleEnd = Math.min(state.candles.length - 1, Math.ceil(state.xStart + state.xCount));
+  const isOnPaintedCandle = index >= visibleStart && index <= visibleEnd && index <= activeIndex;
+  if (!isOnPaintedCandle) {
+    if (state.hoverCandle !== null) { state.hoverCandle = null; draw(); }
+    return;
+  }
   const hovered = Math.max(0, Math.min(activeIndex, index));
   if (state.hoverCandle !== hovered) { state.hoverCandle = hovered; draw(); }
 }
