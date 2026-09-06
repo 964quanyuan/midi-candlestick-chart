@@ -243,6 +243,10 @@ function updateQuantitativeMetrics(activeIndex, activeCandle) {
   $('rsiValue').textContent = rsi.toFixed(2);
 }
 function formatTime(seconds) { return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`; }
+function updateTimeLabel() {
+  $('timeline').value = state.time;
+  $('timeLabel').textContent = `${formatTime(state.time)} / ${formatTime(state.duration)}`;
+}
 
 function updateHoveredCandle(event) {
   if (!state.candles.length || state.dragX || state.dragY) return;
@@ -467,14 +471,19 @@ async function loadPiece(pieceKey) {
     state.duration = state.notes.at(-1).time;
     state.candles = buildCandles(state.notes, state.seed, piece.candleSize);
     resetChartPan();
-    $('timeline').value = 0;
     $('timeline').max = state.duration;
+    state.time = 0;
+    updateTimeLabel();
     $('noteCount').textContent = `${state.notes.length} NOTES / ${state.candles.length} CANDLES`;
     $('statusLabel').textContent = 'READY';
     if ($('pieceTitleLabel')) $('pieceTitleLabel').textContent = piece.title;
     resizeCanvas();
   } catch (error) {
     state.duration = 0;
+    state.time = 0;
+    $('timeline').max = 1;
+    $('timeline').value = 0;
+    $('timeLabel').textContent = '00:00 / 00:00';
     $('statusLabel').textContent = 'MIDI NOT FOUND';
     $('noteCount').textContent = 'ADD MIDI BESIDE PIECES';
     draw();
@@ -491,8 +500,7 @@ function animate() {
     }
     scheduleAudioNotes();
   }
-  $('timeline').value = state.time;
-  $('timeLabel').textContent = `${formatTime(state.time)} / ${formatTime(state.duration)}`;
+  updateTimeLabel();
   $('statusLabel').textContent = state.time >= state.duration ? 'FINISHED' : state.playing ? 'PLAYING' : 'PAUSED';
   draw();
   if (state.playing && state.time < state.duration) state.raf = requestAnimationFrame(animate);
@@ -547,8 +555,7 @@ function finishPlayback() {
   state.audio = null;
   state.audioBus = null;
   state.reverbBus = null;
-  $('timeline').value = state.time;
-  $('timeLabel').textContent = `${formatTime(state.time)} / ${formatTime(state.duration)}`;
+  updateTimeLabel();
   $('statusLabel').textContent = 'FINISHED';
   draw();
 }
