@@ -45,6 +45,14 @@ function syncControlsHeight() {
   else controls.style.height = '';
 }
 
+function redrawWhenFontsReady() {
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => draw());
+    return;
+  }
+  draw();
+}
+
 function seededRandom(seed) {
   let value = (seed >>> 0) || 1;
   return () => { value = (value * 1664525 + 1013904223) >>> 0; return value / 4294967296; };
@@ -148,7 +156,7 @@ function partialCandle(candle, time) {
   return { ...candle, path, high: Math.max(...path), low: Math.min(...path), close: path[path.length - 1] };
 }
 
-function resizeCanvas() { const rect = canvas.getBoundingClientRect(), ratio = window.devicePixelRatio || 1; canvas.width = rect.width * ratio; canvas.height = rect.height * ratio; ctx.setTransform(ratio, 0, 0, ratio, 0, 0); draw(); syncControlsHeight(); }
+function resizeCanvas() { const rect = canvas.getBoundingClientRect(), ratio = window.devicePixelRatio || 1; canvas.width = rect.width * ratio; canvas.height = rect.height * ratio; ctx.setTransform(ratio, 0, 0, ratio, 0, 0); redrawWhenFontsReady(); syncControlsHeight(); }
 function draw() {
   const width = canvas.clientWidth, height = canvas.clientHeight; ctx.clearRect(0, 0, width, height); if (!state.candles.length) return;
   const visibleValues = state.candles.slice(Math.floor(state.xStart), Math.ceil(state.xStart + state.xCount)).flatMap(candle => [candle.low, candle.high]);
@@ -560,8 +568,21 @@ function finishPlayback() {
   draw();
 }
 
+function syncPieceSelector() {
+  const pieceSelect = $('pieceSelect');
+  if (!pieceSelect) return;
+  const placeholder = Array.from(pieceSelect.options).find(option => option.value === '');
+  if (placeholder && pieceSelect.value !== '') {
+    pieceSelect.removeChild(placeholder);
+  }
+  if (pieceSelect.value === '' && !placeholder) {
+    const newPlaceholder = new Option('SELECT PIECE', '');
+    pieceSelect.insertBefore(newPlaceholder, pieceSelect.firstChild);
+  }
+}
+
 $('seed').value = state.seed; $('attackValue').textContent = `${state.attack.toFixed(3)}s`; $('reverbValue').textContent = `${Math.round(state.reverb * 100)}%`; $('panSensitivityValue').textContent = `${state.panSensitivity.toFixed(2)}x`;
-$('playButton').onclick = play; $('pauseButton').onclick = pause; $('restartButton').onclick = restart; $('finishButton').onclick = finishPlayback; $('pieceSelect').onchange = event => loadPiece(event.target.value); $('timeline').oninput = event => { state.time = Number(event.target.value); if (state.audio) state.audio.close(); state.audio = null; draw(); }; $('speed').oninput = event => { state.speed = Number(event.target.value); $('speedValue').textContent = `${state.speed.toFixed(2)}x`; }; $('attack').oninput = event => { state.attack = Number(event.target.value); $('attackValue').textContent = `${state.attack.toFixed(3)}s`; }; $('reverb').oninput = event => { state.reverb = Number(event.target.value); $('reverbValue').textContent = `${Math.round(state.reverb * 100)}%`; if (state.reverbBus) state.reverbBus.gain.setTargetAtTime(state.reverb, state.audio.currentTime, 0.01); }; $('panSensitivity').oninput = event => { state.panSensitivity = Number(event.target.value); $('panSensitivityValue').textContent = `${state.panSensitivity.toFixed(2)}x`; }; $('seed').onchange = event => { const seed = Number.parseInt(event.target.value, 10); state.seed = Number.isNaN(seed) ? 1 : seed; state.chartNotes = selectFormationNotes(state.notes, seededRandom(state.seed)); state.candles = buildCandles(state.notes, state.seed, state.piece.candleSize); restart(); };
+$('playButton').onclick = play; $('pauseButton').onclick = pause; $('restartButton').onclick = restart; $('finishButton').onclick = finishPlayback; $('pieceSelect').onchange = event => { if (event.target.value) { syncPieceSelector(); } loadPiece(event.target.value); }; $('timeline').oninput = event => { state.time = Number(event.target.value); if (state.audio) state.audio.close(); state.audio = null; draw(); }; $('speed').oninput = event => { state.speed = Number(event.target.value); $('speedValue').textContent = `${state.speed.toFixed(2)}x`; }; $('attack').oninput = event => { state.attack = Number(event.target.value); $('attackValue').textContent = `${state.attack.toFixed(3)}s`; }; $('reverb').oninput = event => { state.reverb = Number(event.target.value); $('reverbValue').textContent = `${Math.round(state.reverb * 100)}%`; if (state.reverbBus) state.reverbBus.gain.setTargetAtTime(state.reverb, state.audio.currentTime, 0.01); }; $('panSensitivity').oninput = event => { state.panSensitivity = Number(event.target.value); $('panSensitivityValue').textContent = `${state.panSensitivity.toFixed(2)}x`; }; $('seed').onchange = event => { const seed = Number.parseInt(event.target.value, 10); state.seed = Number.isNaN(seed) ? 1 : seed; state.chartNotes = selectFormationNotes(state.notes, seededRandom(state.seed)); state.candles = buildCandles(state.notes, state.seed, state.piece.candleSize); restart(); };
 const themeToggle = $('themeToggle');
 if (themeToggle) {
   themeToggle.onclick = () => { const night = document.body.classList.toggle('night'); themeToggle.textContent = night ? 'Day mode' : 'Night mode'; themeToggle.setAttribute('aria-pressed', String(night)); draw(); };
@@ -588,5 +609,10 @@ canvas.addEventListener('pointercancel', event => {
 canvas.addEventListener('pointerleave', () => {
   if (state.hoverCandle !== null) { state.hoverCandle = null; draw(); }
 });
-window.onresize = resizeCanvas; window.onkeydown = event => { if (event.target.tagName === 'INPUT') return; if (event.code === 'Space') { event.preventDefault(); state.playing ? pause() : play(); } if (event.key.toLowerCase() === 'r') restart(); if (event.key === 'ArrowRight') { state.time = state.duration; draw(); } };
-loadPiece('CTNRS');
+window.onresize = resizeCanvas;
+window.onkeydown = event => {
+  if (event.target.tagName === 'INPUT') return;
+  if (event.code === 'Space') { event.preventDefault(); state.playing ? pause() : play(); }
+  if (event.key.toLowerCase() === 'r') restart();
+  if (event.key === 'ArrowRight') { state.time = state.duration; draw(); }
+};
