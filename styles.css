@@ -83,7 +83,18 @@ button { border: 1px solid var(--ink); background: transparent; color: var(--ink
 button:hover, button:focus-visible { background: var(--ink); color: var(--paper); outline: none; }
 button.primary { background: var(--ink); color: var(--paper); }
 button.primary:hover { background: var(--green); border-color: var(--green); }
-body.night button.primary:hover { background: var(--bullish); border-color: var(--bullish); color: #101010; }
+body.night button.primary:hover {
+  background: var(--bullish);
+  border-color: var(--bullish);
+  color: #101010;
+  box-shadow: 0 0 4px var(--bullish), 0 0 9px var(--bullish), 0 0 14px color-mix(in srgb, var(--bullish) 27%, transparent);
+}
+body.night #pauseButton:hover {
+  background: var(--bearish);
+  border-color: var(--bearish);
+  color: #101010;
+  box-shadow: 0 0 4px var(--bearish), 0 0 9px var(--bearish), 0 0 14px color-mix(in srgb, var(--bearish) 27%, transparent);
+}
 .icon-button { font-size: 19px; line-height: 1; }
 .timeline { width: 100%; margin-top: 22px; accent-color: var(--gold); }
 .bar-control { display: flex; justify-content: space-between; align-items: baseline; margin-top: 16px; color: var(--muted); font: 500 10px 'DM Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }
