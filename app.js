@@ -26,8 +26,15 @@ const VELOCITY_CURVE = 1.7;
 const $ = (id) => document.getElementById(id);
 const canvas = $('chart');
 const ctx = canvas.getContext('2d');
+const chartFrame = document.querySelector('.chart-frame');
+const controls = document.querySelector('.controls');
 const initialSeed = Math.floor(Math.random() * 4294967295) + 1;
 const state = { pieceKey: 'CTNRS', piece: PIECES.CTNRS, notes: [], chartNotes: [], candles: [], duration: 0, time: 0, seed: initialSeed, speed: 1, attack: 0.006, reverb: 0, panSensitivity: 1, hoverCandle: null, playing: false, paused: false, raf: 0, audio: null, audioBus: null, reverbBus: null, audioNoteIndex: 0, audioOrigin: 0, audioStart: 0, xStart: 0, xCount: 0, yZoom: 1, yCenter: null, dragY: null, dragX: null };
+
+function syncControlsHeight() {
+  if (window.matchMedia('(min-width: 851px)').matches) controls.style.height = `${chartFrame.getBoundingClientRect().height}px`;
+  else controls.style.height = '';
+}
 
 function seededRandom(seed) {
   let value = (seed >>> 0) || 1;
@@ -124,13 +131,13 @@ function partialCandle(candle, time) {
   return { ...candle, path, high: Math.max(...path), low: Math.min(...path), close: path[path.length - 1] };
 }
 
-function resizeCanvas() { const rect = canvas.getBoundingClientRect(), ratio = window.devicePixelRatio || 1; canvas.width = rect.width * ratio; canvas.height = rect.height * ratio; ctx.setTransform(ratio, 0, 0, ratio, 0, 0); draw(); }
+function resizeCanvas() { const rect = canvas.getBoundingClientRect(), ratio = window.devicePixelRatio || 1; canvas.width = rect.width * ratio; canvas.height = rect.height * ratio; ctx.setTransform(ratio, 0, 0, ratio, 0, 0); draw(); syncControlsHeight(); }
 function draw() {
   const width = canvas.clientWidth, height = canvas.clientHeight; ctx.clearRect(0, 0, width, height); if (!state.candles.length) return;
   const visibleValues = state.candles.slice(Math.floor(state.xStart), Math.ceil(state.xStart + state.xCount)).flatMap(candle => [candle.low, candle.high]);
   const values = visibleValues.length ? visibleValues : state.candles.flatMap(candle => [candle.low, candle.high]);
   const dataMin = Math.min(...values), dataMax = Math.max(...values), dataRange = Math.max(2, (dataMax - dataMin) * 1.1), center = state.yCenter ?? (dataMin + dataMax) / 2, visibleRange = dataRange / state.yZoom, min = center - visibleRange / 2, max = center + visibleRange / 2, plotWidth = width - 58, slot = plotWidth / Math.max(1, state.xCount), y = value => height - 28 - ((value - min) / visibleRange) * (height - 52), x = index => 38 + (index - state.xStart + 0.5) * slot;
-  const theme = getComputedStyle(document.documentElement);
+  const theme = getComputedStyle(document.body);
   ctx.strokeStyle = theme.getPropertyValue('--line').trim(); ctx.lineWidth = 1; ctx.font = '10px DM Mono, monospace'; ctx.fillStyle = theme.getPropertyValue('--muted').trim();
   for (let i = 0; i < 5; i++) { const value = min + (visibleRange * i / 4); const py = y(value); ctx.beginPath(); ctx.moveTo(38, py); ctx.lineTo(width - 10, py); ctx.stroke(); ctx.fillText(value.toFixed(1), 3, py - 4); }
   const nextNoteIndex = state.chartNotes.findIndex(note => note.time > state.time);
@@ -139,6 +146,8 @@ function draw() {
   const active = partialCandle(state.candles[activeIndex], state.time); const completed = state.time >= state.candles[activeIndex].notes.at(-1).time;
   const selectedIndex = state.hoverCandle !== null && state.hoverCandle <= activeIndex ? state.hoverCandle : activeIndex;
   const selectedCandle = selectedIndex === activeIndex && !completed ? active : state.candles[selectedIndex];
+  const bullishColor = theme.getPropertyValue('--bullish').trim();
+  const bearishColor = theme.getPropertyValue('--bearish').trim();
   const plotTop = 0;
   const plotBottom = height - 28;
   const plotLeft = 38;
@@ -147,8 +156,8 @@ function draw() {
   ctx.beginPath();
   ctx.rect(plotLeft, plotTop, plotRight - plotLeft, plotBottom - plotTop);
   ctx.clip();
-  state.candles.forEach((candle, index) => { if (index > activeIndex || (index === activeIndex && !completed) || index < state.xStart - 1 || index > state.xStart + state.xCount + 1) return; const color = candle.close >= candle.open ? '#315d48' : '#b85c45'; drawCandle(candle, index, color, x, y, Math.min(18, Math.max(1, slot * 0.62))); });
-  if (!completed) drawCandle(active, activeIndex, active.close >= active.open ? '#315d48' : '#b85c45', x, y, Math.min(18, Math.max(1, slot * 0.62)));
+  state.candles.forEach((candle, index) => { if (index > activeIndex || (index === activeIndex && !completed) || index < state.xStart - 1 || index > state.xStart + state.xCount + 1) return; const color = candle.close >= candle.open ? bullishColor : bearishColor; drawCandle(candle, index, color, x, y, Math.min(18, Math.max(1, slot * 0.62))); });
+  if (!completed) drawCandle(active, activeIndex, active.close >= active.open ? bullishColor : bearishColor, x, y, Math.min(18, Math.max(1, slot * 0.62)));
   const start = state.candles[activeIndex].notes[0].time, end = state.candles[activeIndex].notes.at(-1).time, progress = end > start ? Math.max(0, Math.min(1, (state.time - start) / (end - start))) : 0, playX = x(activeIndex + progress);
   const currentPrice = active.close;
   const priceY = y(currentPrice);
@@ -179,10 +188,11 @@ function draw() {
   ctx.save();
   ctx.fillStyle = theme.getPropertyValue('--paper').trim(); ctx.textAlign = 'left'; ctx.fillText(priceLabel, 5, labelY + 4); ctx.textAlign = 'left';
   ctx.restore();
-  updateReadout(selectedCandle); updateQuantitativeMetrics(activeIndex, active); $('measureLabel').textContent = `MEASURE ${String(Math.floor(selectedIndex / 2) + 1).padStart(2, '0')} / CANDLE ${String(selectedIndex % 2 + 1).padStart(2, '0')}`;
+  const selectedColor = selectedCandle.close >= selectedCandle.open ? bullishColor : bearishColor;
+  updateReadout(selectedCandle, selectedColor); updateQuantitativeMetrics(activeIndex, active); $('measureLabel').textContent = `MEASURE ${String(Math.floor(selectedIndex / 2) + 1).padStart(2, '0')} / CANDLE ${String(selectedIndex % 2 + 1).padStart(2, '0')}`;
 }
 function drawCandle(candle, index, color, x, y, bodyWidth) { const px = x(index), open = y(candle.open), close = y(candle.close), high = y(candle.high), low = y(candle.low); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(px, high); ctx.lineTo(px, low); ctx.stroke(); ctx.globalAlpha = .84; ctx.fillRect(px - bodyWidth / 2, Math.min(open, close), bodyWidth, Math.max(2, Math.abs(close - open))); ctx.globalAlpha = 1; }
-function updateReadout(candle) { $('openValue').textContent = candle.open.toFixed(2); $('highValue').textContent = candle.high.toFixed(2); $('lowValue').textContent = candle.low.toFixed(2); $('closeValue').textContent = candle.close.toFixed(2); }
+function updateReadout(candle, color) { const readout = $('openValue').closest('.ohlc-readout'); readout.style.color = color; readout.classList.add('candle-color'); $('openValue').textContent = candle.open.toFixed(2); $('highValue').textContent = candle.high.toFixed(2); $('lowValue').textContent = candle.low.toFixed(2); $('closeValue').textContent = candle.close.toFixed(2); }
 function updateQuantitativeMetrics(activeIndex, activeCandle) {
   const start = Math.max(0, Math.ceil(state.xStart - 0.5));
   const viewportEnd = Math.min(state.candles.length, Math.floor(state.xStart + state.xCount - 0.5) + 1);
