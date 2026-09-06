@@ -11,7 +11,7 @@
   --chart: #ebe9e1;
 }
 :root { --paper: #f3f0e9; --ink: #202521; --muted: #7a8177; --line: #d4d3c9; --chart: #ebe9e1; }
-body.night { --paper: #090b0a; --ink: #e5e1d6; --muted: #858b82; --line: #30352f; --chart: #101411; }
+body.night { --paper: #000000; --ink: #f4f1e8; --muted: #969b92; --line: #292d29; --chart: #050605; }
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; background: var(--paper); color: var(--ink); font-family: 'Space Grotesk', sans-serif; transition: background .25s, color .25s; }
@@ -26,6 +26,7 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 82px); font-weight: 500; line-height
 .chart-frame { position: relative; min-width: 0; display: flex; flex-direction: column; background: var(--chart); border: 1px solid var(--line); padding: 18px 20px 14px 29px;}
 .chart-meta, .chart-foot { color: var(--muted); display: flex; justify-content: space-between; align-items: center; }
 .chart-meta { padding-bottom: 14px; color: var(--ink); }
+.piece-title { min-width: 0; max-width: min(52vw, 680px); margin-left: clamp(10px, 2vw, 30px); color: var(--ink); font: 500 11px 'DM Mono', monospace; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .axis-label { position: absolute; left: 7px; top: 52%; transform: rotate(-90deg) translateX(-50%); transform-origin: left top; white-space: nowrap; color: var(--muted); font: 500 10px 'DM Mono', monospace; letter-spacing: .08em; text-transform: uppercase; }
 .piece-picker { display: flex; align-items: center; gap: 9px; font: 500 11px 'DM Mono', monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .piece-picker select { border: 1px solid var(--line); background: transparent; color: var(--ink); padding: 6px 24px 6px 8px; font: 500 11px 'DM Mono', monospace; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }

@@ -318,7 +318,7 @@ function setupAudio() {
 
 function resetChartPan() {
   state.xStart = 0;
-  state.xCount = Math.max(8, state.candles.length / 3);
+  state.xCount = Math.max(8, Math.min(120, state.candles.length));
   state.yCenter = null;
 }
 

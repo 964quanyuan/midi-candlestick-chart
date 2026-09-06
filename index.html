@@ -10,7 +10,6 @@
   <main class="shell">
     <header class="masthead">
       <div>
-        <p class="eyebrow">Elliott Carter / Catenaires</p>
         <h1>Signal in motion</h1>
       </div>
       <p class="statement">A composed line translated into the language of price: six notes become one candle, and uncertainty becomes visible.</p>
@@ -25,7 +24,7 @@
               <option value="WTRFLL">CHPN: WTRFLL</option>
             </select>
           </label>
-          <span id="pieceTitleLabel" style="font-family: 'DM Mono', monospace; font-size: 11px; text-transform: uppercase; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></span>
+          <span id="pieceTitleLabel" class="piece-title"></span>
           <span id="statusLabel">READY</span>
         </div>
         <span class="axis-label">cumulative semitone delta</span>
@@ -64,6 +63,7 @@
             <span>close <b id="closeValue">0.00</b></span>
           </div>
         </div>
+        <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false">Night mode</button>
       </aside>
     </section>
 
