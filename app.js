@@ -177,7 +177,7 @@ function draw() {
   state.candles.forEach((candle, index) => { if (index > activeIndex || (index === activeIndex && !completed) || index < state.xStart - 1 || index > state.xStart + state.xCount + 1) return; const color = candle.close >= candle.open ? bullishColor : bearishColor; drawCandle(candle, index, color, x, y, Math.min(18, Math.max(1, slot * 0.62)), candleGlow); });
   if (!completed) drawCandle(active, activeIndex, active.close >= active.open ? bullishColor : bearishColor, x, y, Math.min(18, Math.max(1, slot * 0.62)), candleGlow);
   ctx.shadowBlur = 0;
-  const start = state.candles[activeIndex].notes[0].time, end = state.candles[activeIndex].notes.at(-1).time, progress = end > start ? Math.max(0, Math.min(1, (state.time - start) / (end - start))) : 0, playX = x(activeIndex + progress);
+  const playX = x(activeIndex);
   const currentPrice = active.close;
   const priceY = y(currentPrice);
   const gold = theme.getPropertyValue('--gold').trim();
