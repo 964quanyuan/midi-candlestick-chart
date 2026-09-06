@@ -13,7 +13,7 @@
   --chart: #ebe9e1;
 }
 :root { --paper: #f3f0e9; --ink: #202521; --muted: #7a8177; --line: #d4d3c9; --chart: #ebe9e1; }
-body.night { --paper: #000000; --ink: #f4f1e8; --muted: #969b92; --line: #505150; --chart: #363636; --bullish: #bafb74; --bearish: #fb98f8; --gold: #ffd35a; }
+body.night { --paper: #000000; --ink: #f4f1e8; --muted: #969b92; --line: #505150; --chart: #363636; --bullish: #bafb74; --bearish: #fb98f8; --gold: #ffe882; }
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; background: var(--paper); color: var(--ink); font-family: 'Space Grotesk', sans-serif; transition: background .25s, color .25s; }

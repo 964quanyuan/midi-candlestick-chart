@@ -218,7 +218,7 @@ function updateQuantitativeMetrics(activeIndex, activeCandle) {
   const losses = recentChanges.filter(value => value < 0).reduce((sum, value) => sum - value, 0);
   const rsi = losses === 0 ? (gains === 0 ? 50 : 100) : 100 - (100 / (1 + gains / losses));
   $('volatilityValue').textContent = volatility.toFixed(2);
-  $('pitchDeltaAverageValue').textContent = `${pitchDeltaRange.toFixed(2)} st`;
+  $('pitchDeltaAverageValue').textContent = `${pitchDeltaRange.toFixed(2)}`;
   $('rsiValue').textContent = rsi.toFixed(2);
 }
 function formatTime(seconds) { return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`; }
