@@ -2,8 +2,18 @@ const ACCENT_VELOCITY = 120;
 const UPDATE_INTERVAL = 50;
 const AUDIO_LOOKAHEAD = 0.35;
 const PIECES = {
-  CTNRS: { ticker: 'CRTR: CTNRS', file: 'pieces/catenaires_sample.mid', candleSize: 6, silenceFirst: true },
-  WTRFLL: { ticker: 'CHPN: WTRFLL', file: 'pieces/op10-1.mid', candleSize: 8, silenceFirst: false },
+  CTNRS: { 
+    ticker: 'CRTR: CTNRS', 
+    file: 'pieces/catenaires_sample.mid', 
+    candleSize: 6,
+    title: 'Two Thoughts About the Piano, No. 2: Caténaires - Elliott Carter', 
+    silenceFirst: true },
+  WTRFLL: { 
+    ticker: 'CHPN: WTRFLL', 
+    file: 'pieces/op10-1.mid', 
+    candleSize: 6, 
+    title: 'Étude Opus 10 No. 1, "Waterfall" - Frederic Chopin',
+    silenceFirst: false },
 };
 const LOW_REGISTER_PITCH = 36;
 const FULL_VOLUME_PITCH = 72;
@@ -16,7 +26,8 @@ const VELOCITY_CURVE = 1.7;
 const $ = (id) => document.getElementById(id);
 const canvas = $('chart');
 const ctx = canvas.getContext('2d');
-const state = { pieceKey: 'CTNRS', piece: PIECES.CTNRS, notes: [], chartNotes: [], candles: [], duration: 0, time: 0, seed: 42, speed: 1, playing: false, paused: false, raf: 0, audio: null, audioNoteIndex: 0, audioOrigin: 0, audioStart: 0, xStart: 0, xCount: 0, yZoom: 1, yCenter: null, dragY: null, dragX: null };
+const initialSeed = Math.floor(Math.random() * 99999) + 1;
+const state = { pieceKey: 'CTNRS', piece: PIECES.CTNRS, notes: [], chartNotes: [], candles: [], duration: 0, time: 0, seed: initialSeed, speed: 1, playing: false, paused: false, raf: 0, audio: null, audioNoteIndex: 0, audioOrigin: 0, audioStart: 0, xStart: 0, xCount: 0, yZoom: 1, yCenter: null, dragY: null, dragX: null };
 
 function seededRandom(seed) {
   let value = (seed >>> 0) || 1;
@@ -117,7 +128,8 @@ function resizeCanvas() { const rect = canvas.getBoundingClientRect(), ratio = w
 function draw() {
   const width = canvas.clientWidth, height = canvas.clientHeight; ctx.clearRect(0, 0, width, height); if (!state.candles.length) return;
   const values = state.candles.flatMap(candle => [candle.low, candle.high]), dataMin = Math.min(...values), dataMax = Math.max(...values), dataRange = Math.max(2, (dataMax - dataMin) * 1.1), center = state.yCenter ?? (dataMin + dataMax) / 2, visibleRange = dataRange / state.yZoom, min = center - visibleRange / 2, max = center + visibleRange / 2, plotWidth = width - 58, slot = plotWidth / Math.max(1, state.xCount), y = value => height - 28 - ((value - min) / visibleRange) * (height - 52), x = index => 38 + (index - state.xStart + 0.5) * slot;
-  ctx.strokeStyle = '#d4d3c9'; ctx.lineWidth = 1; ctx.font = '10px DM Mono, monospace'; ctx.fillStyle = '#7a8177';
+  const theme = getComputedStyle(document.documentElement);
+  ctx.strokeStyle = theme.getPropertyValue('--line').trim(); ctx.lineWidth = 1; ctx.font = '10px DM Mono, monospace'; ctx.fillStyle = theme.getPropertyValue('--muted').trim();
   for (let i = 0; i < 5; i++) { const value = min + (visibleRange * i / 4); const py = y(value); ctx.beginPath(); ctx.moveTo(38, py); ctx.lineTo(width - 10, py); ctx.stroke(); ctx.fillText(value.toFixed(1), 3, py - 4); }
   const nextNoteIndex = state.chartNotes.findIndex(note => note.time > state.time);
   const consumedNoteCount = nextNoteIndex < 0 ? state.chartNotes.length : nextNoteIndex;
@@ -126,7 +138,31 @@ function draw() {
   state.candles.forEach((candle, index) => { if (index > activeIndex || (index === activeIndex && !completed) || index < state.xStart - 1 || index > state.xStart + state.xCount + 1) return; const color = candle.close >= candle.open ? '#315d48' : '#b85c45'; drawCandle(candle, index, color, x, y, Math.min(18, Math.max(1, slot * 0.62))); });
   if (!completed) drawCandle(active, activeIndex, active.close >= active.open ? '#315d48' : '#b85c45', x, y, Math.min(18, Math.max(1, slot * 0.62)));
   const start = state.candles[activeIndex].notes[0].time, end = state.candles[activeIndex].notes.at(-1).time, progress = end > start ? Math.max(0, Math.min(1, (state.time - start) / (end - start))) : 0, playX = x(activeIndex + progress);
-  ctx.strokeStyle = '#c39141'; ctx.setLineDash([2, 5]); ctx.beginPath(); ctx.moveTo(playX, 0); ctx.lineTo(playX, height - 28); ctx.stroke(); ctx.setLineDash([]);
+  const currentPrice = active.close;
+  const priceY = y(currentPrice);
+  ctx.strokeStyle = '#c39141';
+  ctx.setLineDash([2, 5]);
+
+  // Only draw the vertical play line if it is within the active chart area (x >= 38)
+  if (playX >= 38 && playX <= width - 10) {
+    ctx.beginPath();
+    ctx.moveTo(playX, 0);
+    ctx.lineTo(playX, height - 28);
+    ctx.stroke();
+  }
+
+  // Draw horizontal price line across the grid area
+  ctx.beginPath();
+  ctx.moveTo(38, priceY);
+  ctx.lineTo(width - 10, priceY);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+
+  const priceLabel = currentPrice.toFixed(2);
+  //const priceLabelWidth = ctx.measureText(priceLabel).width + 10;
+  ctx.fillStyle = '#c39141'; ctx.fillRect(0, priceY - 9, 38, 18);
+  ctx.fillStyle = theme.getPropertyValue('--paper').trim(); ctx.textAlign = 'left'; ctx.fillText(priceLabel, 0, priceY + 4); ctx.textAlign = 'left';
   updateReadout(active, activeIndex); $('measureLabel').textContent = `MEASURE ${String(Math.floor(activeIndex / 2) + 1).padStart(2, '0')} / CANDLE ${String(activeIndex % 2 + 1).padStart(2, '0')}`;
 }
 function drawCandle(candle, index, color, x, y, bodyWidth) { const px = x(index), open = y(candle.open), close = y(candle.close), high = y(candle.high), low = y(candle.low); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(px, high); ctx.lineTo(px, low); ctx.stroke(); ctx.globalAlpha = .84; ctx.fillRect(px - bodyWidth / 2, Math.min(open, close), bodyWidth, Math.max(2, Math.abs(close - open))); ctx.globalAlpha = 1; }
@@ -315,6 +351,7 @@ async function loadPiece(pieceKey) {
     $('timeline').max = state.duration;
     $('noteCount').textContent = `${state.notes.length} NOTES / ${state.candles.length} CANDLES`;
     $('statusLabel').textContent = 'READY';
+    if ($('pieceTitleLabel')) $('pieceTitleLabel').textContent = piece.title;
     resizeCanvas();
   } catch (error) {
     state.duration = 0;
@@ -390,7 +427,10 @@ function finishPlayback() {
   draw();
 }
 
-$('playButton').onclick = play; $('pauseButton').onclick = pause; $('restartButton').onclick = restart; $('finishButton').onclick = finishPlayback; $('pieceSelect').onchange = event => loadPiece(event.target.value); $('timeline').oninput = event => { state.time = Number(event.target.value); if (state.audio) state.audio.close(); state.audio = null; draw(); }; $('speed').oninput = event => { state.speed = Number(event.target.value); $('speedValue').textContent = `${state.speed.toFixed(2)}x`; }; $('seed').onchange = event => { state.seed = Number(event.target.value) || 1; state.chartNotes = selectFormationNotes(state.notes, seededRandom(state.seed)); state.candles = buildCandles(state.notes, state.seed, state.piece.candleSize); restart(); };
+$('seed').value = state.seed; $('seedValue').textContent = state.seed;
+$('playButton').onclick = play; $('pauseButton').onclick = pause; $('restartButton').onclick = restart; $('finishButton').onclick = finishPlayback; $('pieceSelect').onchange = event => loadPiece(event.target.value); $('timeline').oninput = event => { state.time = Number(event.target.value); if (state.audio) state.audio.close(); state.audio = null; draw(); }; $('speed').oninput = event => { state.speed = Number(event.target.value); $('speedValue').textContent = `${state.speed.toFixed(2)}x`; }; $('seed').oninput = event => { const seed = Number.parseInt(event.target.value, 10); if (!Number.isNaN(seed)) $('seedValue').textContent = seed; }; $('seed').onchange = event => { const seed = Number.parseInt(event.target.value, 10); state.seed = Number.isNaN(seed) ? 1 : seed; $('seedValue').textContent = state.seed; state.chartNotes = selectFormationNotes(state.notes, seededRandom(state.seed)); state.candles = buildCandles(state.notes, state.seed, state.piece.candleSize); restart(); };
+const themeToggle = $('themeToggle');
+themeToggle.onclick = () => { const night = document.body.classList.toggle('night'); themeToggle.textContent = night ? 'Day mode' : 'Night mode'; themeToggle.setAttribute('aria-pressed', String(night)); draw(); };
 canvas.addEventListener('wheel', zoomHorizontally, { passive: false });
 canvas.addEventListener('pointerdown', event => {
   if (event.offsetX <= 38) beginYAxisDrag(event);

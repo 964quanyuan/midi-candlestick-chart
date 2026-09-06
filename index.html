@@ -25,13 +25,14 @@
               <option value="WTRFLL">CHPN: WTRFLL</option>
             </select>
           </label>
-          <span id="measureLabel">MEASURE 01 / CANDLE 01</span>
+          <span id="pieceTitleLabel" style="font-family: 'DM Mono', monospace; font-size: 11px; text-transform: uppercase; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></span>
           <span id="statusLabel">READY</span>
         </div>
+        <span class="axis-label">cumulative semitone delta</span>
         <canvas id="chart" aria-label="Animated candlestick chart"></canvas>
         <div class="chart-foot">
-          <span>cumulative semitone delta</span>
           <span id="timeLabel">00:00 / 00:00</span>
+          <span id="measureLabel">MEASURE 01 / CANDLE 01</span>
         </div>
       </div>
 
@@ -52,12 +53,6 @@
           <input id="seed" type="number" value="42" step="1">
           <label for="speed">Playback speed <output id="speedValue">1.00x</output></label>
           <input id="speed" type="range" min="0.5" max="2" step="0.05" value="1">
-        </div>
-
-        <div class="legend">
-          <div><i class="swatch bullish"></i> bullish close</div>
-          <div><i class="swatch bearish"></i> bearish close</div>
-          <div><i class="swatch active"></i> current path</div>
         </div>
 
         <div class="readout">
