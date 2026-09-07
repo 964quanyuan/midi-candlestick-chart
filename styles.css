@@ -103,13 +103,14 @@ body.night #pauseButton:hover {
 .bar-control + input[type=range] { height: 12px; }
 .speed-control { margin-top: 0 !important; }
 .settings { display: grid; grid-template-columns: 1fr auto; gap: 12px 15px; align-items: center; }
-.seed-control { display: flex; align-items: center; justify-content: space-between; gap: 12px; grid-column: 1 / -1; }
-.seed-control label { font: 500 12px 'DM Mono', monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.seed-control { display: flex; align-items: center; gap: 6px; grid-column: 1 / -1; }
+.settings .seed-control label { font: 500 12px 'DM Mono', monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.settings .seed-control label { flex: 1; }
 .settings label { font: 500 11px 'DM Mono', monospace; text-transform: uppercase; color: var(--muted); }
 .settings input[type=number] { width: 7.5em; border: 0; border-bottom: 1px solid var(--ink); background: transparent; padding: 2px 0; color: var(--ink); text-align: right; font: 500 13px 'DM Mono', monospace; }
 .die-button { width: 32px; height: 32px; padding: 4px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 2px; border: 1px solid var(--ink); border-radius: 4px; background: var(--paper); color: var(--ink); }
 .die-button:hover, .die-button:focus-visible { background: var(--paper); color: var(--ink); box-shadow: 0 0 0 2px var(--line); }
-.die-button .pip { width: 5px; height: 5px; align-self: center; justify-self: center; border-radius: 50%; background: currentColor; visibility: hidden; }
+.die-button .pip { width: 5px; min-width: 5px; max-width: 5px; height: 5px; min-height: 5px; max-height: 5px; flex: 0 0 5px; align-self: center; justify-self: center; border-radius: 50%; background: currentColor; visibility: hidden; }
 .die-button .pip.visible { visibility: visible; }
 .settings input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--gold); }
 .sound-controls { display: flex; flex-direction: column; }
