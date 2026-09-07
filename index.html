@@ -20,14 +20,24 @@
     <section class="workbench" aria-label="Catenaires candlestick playback">
       <div class="chart-frame">
         <div class="chart-meta">
-          <label class="piece-picker" for="pieceSelect">Ticker
+          <div class="piece-picker">
+            <span>Ticker</span>
+            <div class="piece-menu">
+              <button id="piecePickerButton" class="piece-picker-button" type="button" aria-haspopup="listbox" aria-expanded="false">SELECT PIECE</button>
+              <div id="piecePickerMenu" class="piece-picker-menu" role="listbox" aria-label="Select piece">
+                <button type="button" role="option" data-piece="">SELECT PIECE</button>
+                <button type="button" role="option" data-piece="CTNRS">CRTR: CTNRS</button>
+                <button type="button" role="option" data-piece="WTRFLL">CHPN: WTRFLL</button>
+                <button type="button" role="option" data-piece="FFNT">SCRBN: FFNT</button>
+              </div>
+            </div>
             <select id="pieceSelect" aria-label="Select piece">
               <option value="" selected>SELECT PIECE</option>
               <option value="CTNRS">CRTR: CTNRS</option>
               <option value="WTRFLL">CHPN: WTRFLL</option>
               <option value="FFNT">SCRBN: FFNT</option>
             </select>
-          </label>
+          </div>
           <span id="pieceTitleLabel" class="piece-title"></span>
           <span id="statusLabel">SELECT PIECE</span>
         </div>

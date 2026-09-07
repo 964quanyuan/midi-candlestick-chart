@@ -579,6 +579,18 @@ function syncPieceSelector() {
     const newPlaceholder = new Option('SELECT PIECE', '');
     pieceSelect.insertBefore(newPlaceholder, pieceSelect.firstChild);
   }
+  const pickerButton = $('piecePickerButton');
+  const pickerMenu = $('piecePickerMenu');
+  if (pickerButton) pickerButton.textContent = pieceSelect.options[pieceSelect.selectedIndex]?.textContent || 'SELECT PIECE';
+  if (pickerMenu && pieceSelect.value !== '') pickerMenu.querySelector('[data-piece=""]')?.remove();
+}
+
+function choosePiece(pieceKey) {
+  const pieceSelect = $('pieceSelect');
+  if (!pieceSelect || !pieceKey) return;
+  pieceSelect.value = pieceKey;
+  syncPieceSelector();
+  loadPiece(pieceKey);
 }
 
 function getDieFace(seed) {
@@ -614,8 +626,37 @@ function applySeed(seed) {
 
 $('seed').value = state.seed; $('attackValue').textContent = `${state.attack.toFixed(3)}s`; $('reverbValue').textContent = `${Math.round(state.reverb * 100)}%`; $('panSensitivityValue').textContent = `${state.panSensitivity.toFixed(2)}x`;
 updateDieFace(state.seed);
-$('playButton').onclick = play; $('pauseButton').onclick = pause; $('restartButton').onclick = restart; $('finishButton').onclick = finishPlayback; $('pieceSelect').onchange = event => { if (event.target.value) { syncPieceSelector(); } loadPiece(event.target.value); }; $('timeline').oninput = event => { state.time = Number(event.target.value); if (state.audio) state.audio.close(); state.audio = null; draw(); }; $('speed').oninput = event => { state.speed = Number(event.target.value); $('speedValue').textContent = `${state.speed.toFixed(2)}x`; }; $('attack').oninput = event => { state.attack = Number(event.target.value); $('attackValue').textContent = `${state.attack.toFixed(3)}s`; }; $('reverb').oninput = event => { state.reverb = Number(event.target.value); $('reverbValue').textContent = `${Math.round(state.reverb * 100)}%`; if (state.reverbBus) state.reverbBus.gain.setTargetAtTime(state.reverb, state.audio.currentTime, 0.01); }; $('panSensitivity').oninput = event => { state.panSensitivity = Number(event.target.value); $('panSensitivityValue').textContent = `${state.panSensitivity.toFixed(2)}x`; }; $('seed').onchange = event => { const seed = Number.parseInt(event.target.value, 10); applySeed(Number.isNaN(seed) ? 1 : seed); };
+$('playButton').onclick = play; $('pauseButton').onclick = pause; $('restartButton').onclick = restart; $('finishButton').onclick = finishPlayback; $('pieceSelect').onchange = event => { if (event.target.value) { syncPieceSelector(); } loadPiece(event.target.value); }; $('piecePickerButton').onclick = () => { const wrapper = $('piecePickerButton').closest('.piece-menu'); const isOpen = wrapper.classList.toggle('open'); $('piecePickerButton').setAttribute('aria-expanded', String(isOpen)); }; $('piecePickerMenu').onclick = event => { const option = event.target.closest('[data-piece]'); if (!option) return; choosePiece(option.dataset.piece); const wrapper = $('piecePickerButton').closest('.piece-menu'); wrapper.classList.remove('open'); $('piecePickerButton').setAttribute('aria-expanded', 'false'); }; document.addEventListener('click', event => { const wrapper = $('piecePickerButton').closest('.piece-menu'); if (!wrapper.contains(event.target)) { wrapper.classList.remove('open'); $('piecePickerButton').setAttribute('aria-expanded', 'false'); } }); $('timeline').oninput = event => { state.time = Number(event.target.value); if (state.audio) state.audio.close(); state.audio = null; draw(); }; $('speed').oninput = event => { state.speed = Number(event.target.value); $('speedValue').textContent = `${state.speed.toFixed(2)}x`; }; $('attack').oninput = event => { state.attack = Number(event.target.value); $('attackValue').textContent = `${state.attack.toFixed(3)}s`; }; $('reverb').oninput = event => { state.reverb = Number(event.target.value); $('reverbValue').textContent = `${Math.round(state.reverb * 100)}%`; if (state.reverbBus) state.reverbBus.gain.setTargetAtTime(state.reverb, state.audio.currentTime, 0.01); }; $('panSensitivity').oninput = event => { state.panSensitivity = Number(event.target.value); $('panSensitivityValue').textContent = `${state.panSensitivity.toFixed(2)}x`; }; $('seed').onchange = event => { const seed = Number.parseInt(event.target.value, 10); applySeed(Number.isNaN(seed) ? 1 : seed); };
 $('seedDie').onclick = () => applySeed(Math.floor(Math.random() * 4294967295) + 1);
+const piecePickerButton = $('piecePickerButton');
+const piecePickerMenu = $('piecePickerMenu');
+if (piecePickerButton && piecePickerMenu) {
+  piecePickerButton.onclick = event => {
+    event.stopPropagation();
+    const wrapper = piecePickerButton.closest('.piece-menu');
+    const isOpen = !wrapper.classList.contains('open');
+    wrapper.classList.toggle('open', isOpen);
+    piecePickerMenu.style.display = isOpen ? 'grid' : 'none';
+    piecePickerButton.setAttribute('aria-expanded', String(isOpen));
+  };
+  piecePickerMenu.onclick = event => {
+    event.stopPropagation();
+    const option = event.target.closest('[data-piece]');
+    if (!option || !option.dataset.piece) return;
+    choosePiece(option.dataset.piece);
+    const wrapper = piecePickerButton.closest('.piece-menu');
+    wrapper.classList.remove('open');
+    piecePickerMenu.style.display = 'none';
+    piecePickerButton.setAttribute('aria-expanded', 'false');
+  };
+  document.addEventListener('click', event => {
+    const wrapper = piecePickerButton.closest('.piece-menu');
+    if (wrapper.contains(event.target)) return;
+    wrapper.classList.remove('open');
+    piecePickerMenu.style.display = 'none';
+    piecePickerButton.setAttribute('aria-expanded', 'false');
+  });
+}
 const themeToggle = $('themeToggle');
 if (themeToggle) {
   themeToggle.onclick = () => { const night = document.body.classList.toggle('night'); themeToggle.textContent = night ? 'Day mode' : 'Night mode'; themeToggle.setAttribute('aria-pressed', String(night)); draw(); };

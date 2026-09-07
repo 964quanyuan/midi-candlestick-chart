@@ -62,7 +62,19 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 82px); font-weight: 500; line-height
 }
 .axis-label { position: absolute; left: 7px; top: 52%; transform: rotate(-90deg) translateX(-50%); transform-origin: left top; white-space: nowrap; color: var(--muted); font: 500 10px 'DM Mono', monospace; letter-spacing: .08em; text-transform: uppercase; }
 .piece-picker { display: flex; align-items: center; gap: 9px; font: 500 11px 'DM Mono', monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-.piece-picker select { border: 1px solid var(--line); background: transparent; color: var(--ink); padding: 6px 24px 6px 8px; font: 500 11px 'DM Mono', monospace; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
+.piece-menu { position: relative; }
+.piece-picker-button { position: relative; min-width: 132px; height: auto; padding: 6px 24px 6px 8px; border: 1px solid var(--line); background: transparent; color: var(--ink); font: 500 11px 'DM Mono', monospace; letter-spacing: .04em; text-transform: uppercase; text-align: left; }
+.piece-picker-button::after { content: ''; position: absolute; top: 50%; right: 8px; width: 6px; height: 6px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: translateY(-65%) rotate(45deg); }
+.piece-menu.open .piece-picker-button::after { transform: translateY(-25%) rotate(225deg); }
+.piece-picker-button:hover, .piece-picker-button:focus-visible { background: var(--line); color: var(--ink); }
+.piece-picker-menu { position: absolute; z-index: 10; top: calc(100% + 3px); left: 0; display: none; min-width: 100%; padding: 3px; border: 1px solid var(--line); background: var(--paper); }
+.piece-menu.open .piece-picker-menu { display: grid; }
+.piece-picker-menu button { height: auto; padding: 7px 8px; border: 0; background: transparent; color: var(--ink); font: 500 11px 'DM Mono', monospace; letter-spacing: .04em; text-align: left; white-space: nowrap; }
+.piece-picker-menu button:hover, .piece-picker-menu button:focus-visible { background: var(--line); color: var(--ink); outline: none; }
+.piece-picker select { display: none; }
+body.night .piece-picker-button, body.night .piece-picker-menu { background: #141614; color: #f4f1e8; }
+body.night .piece-picker-menu button { color: #f4f1e8; }
+body.night .piece-picker-button:hover, body.night .piece-picker-button:focus-visible, body.night .piece-picker-menu button:hover, body.night .piece-picker-menu button:focus-visible { background: #505150; color: #f4f1e8; }
 #statusLabel {
   color: var(--gold);
   text-align: right; /* Keeps text flush against the right boundary */
