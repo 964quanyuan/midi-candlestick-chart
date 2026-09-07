@@ -581,8 +581,41 @@ function syncPieceSelector() {
   }
 }
 
+function getDieFace(seed) {
+  const remainder = ((seed % 6) + 6) % 6;
+  return remainder || 6;
+}
+
+function updateDieFace(seed) {
+  const die = $('seedDie');
+  if (!die) return;
+  const face = getDieFace(seed);
+  const pipPositions = {
+    1: [5],
+    2: [1, 9],
+    3: [1, 5, 9],
+    4: [1, 3, 7, 9],
+    5: [1, 3, 5, 7, 9],
+    6: [1, 3, 4, 6, 7, 9],
+  };
+  die.innerHTML = Array.from({ length: 9 }, (_, index) => `<span class="pip${pipPositions[face].includes(index + 1) ? ' visible' : ''}"></span>`).join('');
+  die.setAttribute('aria-label', `Randomize seed; showing ${face}`);
+}
+
+function applySeed(seed) {
+  state.seed = seed;
+  $('seed').value = seed;
+  updateDieFace(seed);
+  if (!state.notes.length) return;
+  state.chartNotes = selectFormationNotes(state.notes, seededRandom(state.seed));
+  state.candles = buildCandles(state.notes, state.seed, state.piece.candleSize);
+  restart();
+}
+
 $('seed').value = state.seed; $('attackValue').textContent = `${state.attack.toFixed(3)}s`; $('reverbValue').textContent = `${Math.round(state.reverb * 100)}%`; $('panSensitivityValue').textContent = `${state.panSensitivity.toFixed(2)}x`;
-$('playButton').onclick = play; $('pauseButton').onclick = pause; $('restartButton').onclick = restart; $('finishButton').onclick = finishPlayback; $('pieceSelect').onchange = event => { if (event.target.value) { syncPieceSelector(); } loadPiece(event.target.value); }; $('timeline').oninput = event => { state.time = Number(event.target.value); if (state.audio) state.audio.close(); state.audio = null; draw(); }; $('speed').oninput = event => { state.speed = Number(event.target.value); $('speedValue').textContent = `${state.speed.toFixed(2)}x`; }; $('attack').oninput = event => { state.attack = Number(event.target.value); $('attackValue').textContent = `${state.attack.toFixed(3)}s`; }; $('reverb').oninput = event => { state.reverb = Number(event.target.value); $('reverbValue').textContent = `${Math.round(state.reverb * 100)}%`; if (state.reverbBus) state.reverbBus.gain.setTargetAtTime(state.reverb, state.audio.currentTime, 0.01); }; $('panSensitivity').oninput = event => { state.panSensitivity = Number(event.target.value); $('panSensitivityValue').textContent = `${state.panSensitivity.toFixed(2)}x`; }; $('seed').onchange = event => { const seed = Number.parseInt(event.target.value, 10); state.seed = Number.isNaN(seed) ? 1 : seed; state.chartNotes = selectFormationNotes(state.notes, seededRandom(state.seed)); state.candles = buildCandles(state.notes, state.seed, state.piece.candleSize); restart(); };
+updateDieFace(state.seed);
+$('playButton').onclick = play; $('pauseButton').onclick = pause; $('restartButton').onclick = restart; $('finishButton').onclick = finishPlayback; $('pieceSelect').onchange = event => { if (event.target.value) { syncPieceSelector(); } loadPiece(event.target.value); }; $('timeline').oninput = event => { state.time = Number(event.target.value); if (state.audio) state.audio.close(); state.audio = null; draw(); }; $('speed').oninput = event => { state.speed = Number(event.target.value); $('speedValue').textContent = `${state.speed.toFixed(2)}x`; }; $('attack').oninput = event => { state.attack = Number(event.target.value); $('attackValue').textContent = `${state.attack.toFixed(3)}s`; }; $('reverb').oninput = event => { state.reverb = Number(event.target.value); $('reverbValue').textContent = `${Math.round(state.reverb * 100)}%`; if (state.reverbBus) state.reverbBus.gain.setTargetAtTime(state.reverb, state.audio.currentTime, 0.01); }; $('panSensitivity').oninput = event => { state.panSensitivity = Number(event.target.value); $('panSensitivityValue').textContent = `${state.panSensitivity.toFixed(2)}x`; }; $('seed').onchange = event => { const seed = Number.parseInt(event.target.value, 10); applySeed(Number.isNaN(seed) ? 1 : seed); };
+$('seedDie').onclick = () => applySeed(Math.floor(Math.random() * 4294967295) + 1);
 const themeToggle = $('themeToggle');
 if (themeToggle) {
   themeToggle.onclick = () => { const night = document.body.classList.toggle('night'); themeToggle.textContent = night ? 'Day mode' : 'Night mode'; themeToggle.setAttribute('aria-pressed', String(night)); draw(); };
