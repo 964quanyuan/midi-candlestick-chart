@@ -23,6 +23,13 @@ const PIECES = {
     notesPerMeasure: 24,
     title: 'Étude Opus 42 No. 5, "Affanato" - Alexander Scriabin',
     silenceFirst: false },
+  DSRDR: {
+    ticker: 'LGT: DSRDR',
+    file: 'pieces/désordre.mid',
+    candleSize: 6,
+    notesPerMeasure: -1,
+    title: 'Études, Book 1: No. 1, "Désordre" - György Ligeti',
+    silenceFirst: false },
 };
 const LOW_REGISTER_PITCH = 36;
 const FULL_VOLUME_PITCH = 72;
@@ -91,6 +98,7 @@ function applyPieceSpecificAudio(notes, piece) {
 }
 
 function getMeasureAndCandle(index, piece = state.piece) {
+  if (piece.notesPerMeasure <= 0) return { measure: null, candleInMeasure: index + 1 };
   const noteOffset = index * piece.candleSize;
   const measure = Math.floor(noteOffset / piece.notesPerMeasure) + 1;
   const withinMeasure = noteOffset % piece.notesPerMeasure;
@@ -224,7 +232,9 @@ function draw() {
   const selectedColor = selectedCandle.close >= selectedCandle.open ? bullishColor : bearishColor;
   updateReadout(selectedCandle, selectedColor); updateQuantitativeMetrics(activeIndex, active);
   const { measure, candleInMeasure } = getMeasureAndCandle(selectedIndex, state.piece);
-  $('measureLabel').textContent = `MEASURE ${String(measure).padStart(2, '0')} / CANDLE ${String(candleInMeasure).padStart(2, '0')}`;
+  $('measureLabel').textContent = measure === null
+    ? `MEASURE ? / CANDLE ${String(candleInMeasure).padStart(2, '0')}`
+    : `MEASURE ${String(measure).padStart(2, '0')} / CANDLE ${String(candleInMeasure).padStart(2, '0')}`;
 }
 function drawCandle(candle, index, color, x, y, bodyWidth, glowing) { const px = x(index), open = y(candle.open), close = y(candle.close), high = y(candle.high), low = y(candle.low); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2; if (glowing) { ctx.shadowColor = color; ctx.shadowBlur = 6; } else ctx.shadowBlur = 0; ctx.beginPath(); ctx.moveTo(px, high); ctx.lineTo(px, low); ctx.stroke(); ctx.globalAlpha = .84; ctx.fillRect(px - bodyWidth / 2, Math.min(open, close), bodyWidth, Math.max(2, Math.abs(close - open))); ctx.globalAlpha = 1; }
 function updateReadout(candle, color) { const readout = $('openValue').closest('.ohlc-readout'); readout.style.color = color; readout.classList.add('candle-color'); $('openValue').textContent = candle.open.toFixed(2); $('highValue').textContent = candle.high.toFixed(2); $('lowValue').textContent = candle.low.toFixed(2); $('closeValue').textContent = candle.close.toFixed(2); }
