@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>𝄡ar for ฿ar.</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260909">
 </head>
 <body>
   <main class="shell">
@@ -18,6 +18,7 @@
     </header>
 
     <section class="workbench" aria-label="Catenaires candlestick playback">
+      <div class="workbench-freeze-overlay" aria-hidden="true"></div>
       <div class="chart-frame">
         <div class="chart-meta">
           <div class="piece-picker">
@@ -103,11 +104,56 @@
       </div>
       <button id="challengeButton" class="challenge-button" type="button">begin trading challenge</button>
     </footer>
-    <section id="challengeScreen" class="challenge-screen" hidden>
-      <p>coming soon...</p>
-      <button id="backToChartButton" type="button">back to chart visualizer</button>
+    <section id="challengeScreen" class="challenge-screen" hidden aria-label="Trading challenge">
+      <div class="workbench challenge-workbench">
+        <div class="chart-frame">
+          <div class="chart-meta">
+            <div class="piece-picker">
+              <span>Ticker</span>
+              <div class="piece-menu">
+                <button id="challengePiecePickerButton" class="piece-picker-button" type="button" aria-haspopup="listbox" aria-expanded="false">SELECT PIECE</button>
+                <div id="challengePiecePickerMenu" class="piece-picker-menu" role="listbox" aria-label="Select piece">
+                  <button type="button" role="option" data-piece="">SELECT PIECE</button>
+                  <button type="button" role="option" data-piece="CTNRS">CRTR: CTNRS</button>
+                  <button type="button" role="option" data-piece="WTRFLL">CHPN: WTRFLL</button>
+                  <button type="button" role="option" data-piece="FFNT">SCRBN: FFNT</button>
+                  <button type="button" role="option" data-piece="DSRDR">LGT: DSRDR</button>
+                </div>
+              </div>
+              <select id="challengePieceSelect" aria-label="Select piece">
+                <option value="" selected>SELECT PIECE</option>
+                <option value="CTNRS">CRTR: CTNRS</option>
+                <option value="WTRFLL">CHPN: WTRFLL</option>
+                <option value="FFNT">SCRBN: FFNT</option>
+                <option value="DSRDR">LGT: DSRDR</option>
+              </select>
+            </div>
+            <span id="challengePieceTitleLabel" class="piece-title"></span>
+            <span id="challengeStatusLabel">SELECT</span>
+          </div>
+          <span class="axis-label">cumulative semitone delta</span>
+          <canvas id="challengeChart" aria-label="Trading challenge candlestick chart"></canvas>
+          <div class="chart-foot">
+            <span id="challengeMeasureLabel">MEASURE 01 / CANDLE 01</span>
+            <div class="ohlc-readout" aria-label="Open high low close">
+              <span>O <b id="challengeOpenValue">0.00</b></span>
+              <span>H <b id="challengeHighValue">0.00</b></span>
+              <span>L <b id="challengeLowValue">0.00</b></span>
+              <span>C <b id="challengeCloseValue">0.00</b></span>
+            </div>
+          </div>
+          <div class="quantitative-metrics">
+            <span>volatility <b id="challengeVolatilityValue">0.00</b></span>
+            <span>pitch delta range <b id="challengePitchDeltaAverageValue">0.00</b></span>
+            <span>relative strength index (14) <b id="challengeRsiValue">50.00</b></span>
+          </div>
+        </div>
+        <aside class="controls challenge-controls">
+          <button id="backToChartButton" class="theme-toggle" type="button">back to chart visualizer</button>
+        </aside>
+      </div>
     </section>
   </main>
-  <script src="app.js?v=20260908"></script>
+  <script src="app.js?v=20260909"></script>
 </body>
 </html>

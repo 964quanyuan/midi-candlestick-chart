@@ -201,8 +201,8 @@ function draw() {
   ctx.beginPath();
   ctx.rect(plotLeft, plotTop, plotRight - plotLeft, plotBottom - plotTop);
   ctx.clip();
-  state.candles.forEach((candle, index) => { if (index > activeIndex || (index === activeIndex && !completed) || index < state.xStart - 1 || index > state.xStart + state.xCount + 1) return; const color = candle.close >= candle.open ? bullishColor : bearishColor; drawCandle(candle, index, color, x, y, Math.min(18, Math.max(1, slot * 0.62)), candleGlow); });
-  if (!completed) drawCandle(active, activeIndex, active.close >= active.open ? bullishColor : bearishColor, x, y, Math.min(18, Math.max(1, slot * 0.62)), candleGlow);
+  state.candles.forEach((candle, index) => { if (index > activeIndex || (index === activeIndex && !completed) || index < state.xStart - 1 || index > state.xStart + state.xCount + 1) return; const color = candle.close >= candle.open ? bullishColor : bearishColor; drawCandle(ctx, candle, index, color, x, y, Math.min(18, Math.max(1, slot * 0.62)), candleGlow); });
+  if (!completed) drawCandle(ctx, active, activeIndex, active.close >= active.open ? bullishColor : bearishColor, x, y, Math.min(18, Math.max(1, slot * 0.62)), candleGlow);
   ctx.shadowBlur = 0;
   const playX = x(activeIndex);
   const currentPrice = active.close;
@@ -247,7 +247,7 @@ function draw() {
     ? `MEASURE ? / CANDLE ${String(candleInMeasure).padStart(2, '0')}`
     : `MEASURE ${String(measure).padStart(2, '0')} / CANDLE ${String(candleInMeasure).padStart(2, '0')}`;
 }
-function drawCandle(candle, index, color, x, y, bodyWidth, glowing) { const px = x(index), open = y(candle.open), close = y(candle.close), high = y(candle.high), low = y(candle.low); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2; if (glowing) { ctx.shadowColor = color; ctx.shadowBlur = 6; } else ctx.shadowBlur = 0; ctx.beginPath(); ctx.moveTo(px, high); ctx.lineTo(px, low); ctx.stroke(); ctx.globalAlpha = .84; ctx.fillRect(px - bodyWidth / 2, Math.min(open, close), bodyWidth, Math.max(2, Math.abs(close - open))); ctx.globalAlpha = 1; }
+function drawCandle(ctx, candle, index, color, x, y, bodyWidth, glowing) { const px = x(index), open = y(candle.open), close = y(candle.close), high = y(candle.high), low = y(candle.low); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2; if (glowing) { ctx.shadowColor = color; ctx.shadowBlur = 6; } else ctx.shadowBlur = 0; ctx.beginPath(); ctx.moveTo(px, high); ctx.lineTo(px, low); ctx.stroke(); ctx.globalAlpha = .84; ctx.fillRect(px - bodyWidth / 2, Math.min(open, close), bodyWidth, Math.max(2, Math.abs(close - open))); ctx.globalAlpha = 1; }
 function updateReadout(candle, color) { const readout = $('openValue').closest('.ohlc-readout'); readout.style.color = color; readout.classList.add('candle-color'); $('openValue').textContent = candle.open.toFixed(2); $('highValue').textContent = candle.high.toFixed(2); $('lowValue').textContent = candle.low.toFixed(2); $('closeValue').textContent = candle.close.toFixed(2); }
 function updateQuantitativeMetrics(activeIndex, activeCandle) {
   const start = Math.max(0, Math.ceil(state.xStart - 0.5));
@@ -476,6 +476,260 @@ function resetChartToFullView() {
   state.yCenter = null;
 }
 
+function updateFooterNotes() {
+  const noteCount = $('noteCount');
+  if (!noteCount) return;
+  const challengeScreen = $('challengeScreen');
+  const inChallenge = challengeScreen && !challengeScreen.hidden;
+  if (inChallenge) {
+    if (!challengeState.piece) noteCount.textContent = 'SELECT A TICKER TO BEGIN';
+    else if (challengeState.candles.length) noteCount.textContent = `AUDIOVISUAL SPECS: ${challengeState.notes.length} NOTES / ${challengeState.candles.length} CANDLES`;
+    else noteCount.textContent = 'ADD MIDI BESIDE PIECES';
+  } else if (!state.piece || !state.notes.length) {
+    noteCount.textContent = state.piece ? 'ADD MIDI BESIDE PIECES' : 'Loading MIDI…';
+  } else {
+    noteCount.textContent = `AUDIOVISUAL SPECS: ${state.notes.length} NOTES / ${state.candles.length} CANDLES`;
+  }
+}
+
+const challengeCanvas = $('challengeChart');
+const challengeCtx = challengeCanvas ? challengeCanvas.getContext('2d') : null;
+const workbenchSection = document.querySelector('section.workbench');
+const challengeState = { pieceKey: '', piece: null, notes: [], candles: [], seed: 42, xStart: 0, xCount: 8, yZoom: 1, yCenter: null, hoverCandle: null, dragX: null, dragY: null };
+
+function resizeChallengeCanvas() {
+  if (!challengeCanvas) return;
+  const rect = challengeCanvas.getBoundingClientRect(), ratio = window.devicePixelRatio || 1;
+  challengeCanvas.width = rect.width * ratio;
+  challengeCanvas.height = rect.height * ratio;
+  challengeCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  drawChallengeChart();
+}
+
+function updateChallengeReadout(candle, color) {
+  const openValue = $('challengeOpenValue');
+  if (!openValue) return;
+  const readout = openValue.closest('.ohlc-readout');
+  readout.style.color = color;
+  readout.classList.add('candle-color');
+  openValue.textContent = candle.open.toFixed(2);
+  $('challengeHighValue').textContent = candle.high.toFixed(2);
+  $('challengeLowValue').textContent = candle.low.toFixed(2);
+  $('challengeCloseValue').textContent = candle.close.toFixed(2);
+}
+
+function updateChallengeQuantitativeMetrics(activeIndex) {
+  const start = Math.max(0, Math.ceil(challengeState.xStart - 0.5));
+  const viewportEnd = Math.min(challengeState.candles.length, Math.floor(challengeState.xStart + challengeState.xCount - 0.5) + 1);
+  const end = Math.min(viewportEnd, activeIndex + 1);
+  const scopedCandles = challengeState.candles.slice(start, end);
+  const closes = scopedCandles.map(candle => candle.close);
+  const closeChanges = closes.slice(1).map((close, index) => close - closes[index]);
+  const averageChange = closeChanges.length ? closeChanges.reduce((sum, value) => sum + value, 0) / closeChanges.length : 0;
+  const volatility = closeChanges.length ? Math.sqrt(closeChanges.reduce((sum, value) => sum + (value - averageChange) ** 2, 0) / closeChanges.length) : 0;
+  const highestHigh = scopedCandles.length ? Math.max(...scopedCandles.map(candle => candle.high)) : 0;
+  const lowestLow = scopedCandles.length ? Math.min(...scopedCandles.map(candle => candle.low)) : 0;
+  const pitchDeltaRange = highestHigh - lowestLow;
+  const period = 14;
+  const recentChanges = closeChanges.slice(-period);
+  const gains = recentChanges.filter(value => value > 0).reduce((sum, value) => sum + value, 0);
+  const losses = recentChanges.filter(value => value < 0).reduce((sum, value) => sum - value, 0);
+  const rsi = losses === 0 ? (gains === 0 ? 50 : 100) : 100 - (100 / (1 + gains / losses));
+  $('challengeVolatilityValue').textContent = volatility.toFixed(2);
+  $('challengePitchDeltaAverageValue').textContent = `${pitchDeltaRange.toFixed(2)}`;
+  $('challengeRsiValue').textContent = rsi.toFixed(2);
+}
+
+function drawChallengeChart() {
+  if (!challengeCanvas) return;
+  const width = challengeCanvas.clientWidth, height = challengeCanvas.clientHeight;
+  challengeCtx.clearRect(0, 0, width, height);
+  if (!challengeState.candles.length) return;
+  const visibleValues = challengeState.candles.slice(Math.floor(challengeState.xStart), Math.ceil(challengeState.xStart + challengeState.xCount)).flatMap(candle => [candle.low, candle.high]);
+  const values = visibleValues.length ? visibleValues : challengeState.candles.flatMap(candle => [candle.low, candle.high]);
+  const dataMin = Math.min(...values), dataMax = Math.max(...values), dataRange = Math.max(2, (dataMax - dataMin) * 1.1);
+  const center = challengeState.yCenter ?? (dataMin + dataMax) / 2, visibleRange = dataRange / challengeState.yZoom, min = center - visibleRange / 2;
+  const plotWidth = width - 58, slot = plotWidth / Math.max(1, challengeState.xCount);
+  const y = value => height - 28 - ((value - min) / visibleRange) * (height - 52);
+  const x = index => 38 + (index - challengeState.xStart + 0.5) * slot;
+  const theme = getComputedStyle(document.body);
+  challengeCtx.strokeStyle = theme.getPropertyValue('--line').trim();
+  challengeCtx.lineWidth = 1;
+  challengeCtx.font = '10px DM Mono, monospace';
+  challengeCtx.fillStyle = theme.getPropertyValue('--muted').trim();
+  for (let i = 0; i < 5; i++) {
+    const value = min + (visibleRange * i / 4);
+    const py = y(value);
+    challengeCtx.beginPath(); challengeCtx.moveTo(38, py); challengeCtx.lineTo(width - 10, py); challengeCtx.stroke();
+    challengeCtx.fillText(value.toFixed(1), 3, py - 4);
+  }
+  const bullishColor = theme.getPropertyValue('--bullish').trim();
+  const bearishColor = theme.getPropertyValue('--bearish').trim();
+  const plotLeft = 38, plotRight = width - 10, plotTop = 0, plotBottom = height - 28;
+  const candleGlow = document.body.classList.contains('night');
+  challengeCtx.save();
+  challengeCtx.beginPath();
+  challengeCtx.rect(plotLeft, plotTop, plotRight - plotLeft, plotBottom - plotTop);
+  challengeCtx.clip();
+  challengeState.candles.forEach((candle, index) => {
+    if (index < challengeState.xStart - 1 || index > challengeState.xStart + challengeState.xCount + 1) return;
+    const color = candle.close >= candle.open ? bullishColor : bearishColor;
+    drawCandle(challengeCtx, candle, index, color, x, y, Math.min(18, Math.max(1, slot * 0.62)), candleGlow);
+  });
+  challengeCtx.restore();
+  const lastIndex = challengeState.candles.length - 1;
+  const selectedIndex = challengeState.hoverCandle !== null ? challengeState.hoverCandle : lastIndex;
+  const selectedCandle = challengeState.candles[selectedIndex];
+  const selectedColor = selectedCandle.close >= selectedCandle.open ? bullishColor : bearishColor;
+  updateChallengeReadout(selectedCandle, selectedColor);
+  updateChallengeQuantitativeMetrics(selectedIndex);
+  const { measure, candleInMeasure } = getMeasureAndCandle(selectedIndex, challengeState.piece);
+  $('challengeMeasureLabel').textContent = measure === null
+    ? `MEASURE ? / CANDLE ${String(candleInMeasure).padStart(2, '0')}`
+    : `MEASURE ${String(measure).padStart(2, '0')} / CANDLE ${String(candleInMeasure).padStart(2, '0')}`;
+}
+
+async function loadChallengePiece(pieceKey) {
+  const piece = PIECES[pieceKey];
+  challengeState.pieceKey = pieceKey;
+  challengeState.piece = piece;
+  challengeState.notes = [];
+  challengeState.candles = [];
+  challengeState.xStart = 0;
+  challengeState.xCount = 8;
+  challengeState.yZoom = 1;
+  challengeState.yCenter = null;
+  challengeState.hoverCandle = null;
+  $('challengeStatusLabel').textContent = 'LOADING';
+  try {
+    const response = await fetch(piece.file);
+    if (!response.ok) throw new Error(`Unable to load ${piece.file}`);
+    challengeState.notes = parseMidi(await response.arrayBuffer());
+    challengeState.candles = buildCandles(challengeState.notes, challengeState.seed, piece.candleSize);
+    challengeState.xCount = Math.max(8, Math.min(120, challengeState.candles.length));
+    $('challengeStatusLabel').textContent = 'READY';
+    if ($('challengePieceTitleLabel')) $('challengePieceTitleLabel').textContent = piece.title;
+    resizeChallengeCanvas();
+  } catch (error) {
+    challengeState.candles = [];
+    $('challengeStatusLabel').textContent = 'MIDI NOT FOUND';
+    drawChallengeChart();
+  }
+  updateFooterNotes();
+}
+
+function syncChallengePieceSelector() {
+  const pieceSelect = $('challengePieceSelect');
+  if (!pieceSelect) return;
+  const placeholder = Array.from(pieceSelect.options).find(option => option.value === '');
+  if (placeholder && pieceSelect.value !== '') pieceSelect.removeChild(placeholder);
+  if (pieceSelect.value === '' && !placeholder) {
+    const newPlaceholder = new Option('SELECT PIECE', '');
+    pieceSelect.insertBefore(newPlaceholder, pieceSelect.firstChild);
+  }
+  const pickerButton = $('challengePiecePickerButton');
+  const pickerMenu = $('challengePiecePickerMenu');
+  if (pickerButton) pickerButton.textContent = pieceSelect.options[pieceSelect.selectedIndex]?.textContent || 'SELECT PIECE';
+  if (pickerMenu && pieceSelect.value !== '') pickerMenu.querySelector('[data-piece=""]')?.remove();
+}
+
+function chooseChallengePiece(pieceKey) {
+  const pieceSelect = $('challengePieceSelect');
+  if (!pieceSelect || !pieceKey) return;
+  pieceSelect.value = pieceKey;
+  syncChallengePieceSelector();
+  loadChallengePiece(pieceKey);
+}
+
+function updateChallengeHoveredCandle(event) {
+  if (!challengeState.candles.length || challengeState.dragX || challengeState.dragY) return;
+  const rect = challengeCanvas.getBoundingClientRect();
+  const localX = event.clientX - rect.left;
+  const localY = event.clientY - rect.top;
+  if (localX < 38 || localX > challengeCanvas.clientWidth - 10 || localY < 0 || localY > challengeCanvas.clientHeight - 28) {
+    if (challengeState.hoverCandle !== null) { challengeState.hoverCandle = null; drawChallengeChart(); }
+    return;
+  }
+  const index = Math.floor(challengeState.xStart + ((localX - 38) / (challengeCanvas.clientWidth - 58)) * challengeState.xCount);
+  const visibleStart = Math.floor(challengeState.xStart);
+  const visibleEnd = Math.min(challengeState.candles.length - 1, Math.ceil(challengeState.xStart + challengeState.xCount));
+  if (index < visibleStart || index > visibleEnd) {
+    if (challengeState.hoverCandle !== null) { challengeState.hoverCandle = null; drawChallengeChart(); }
+    return;
+  }
+  const hovered = Math.max(0, Math.min(challengeState.candles.length - 1, index));
+  if (challengeState.hoverCandle !== hovered) { challengeState.hoverCandle = hovered; drawChallengeChart(); }
+}
+
+function zoomChallengeHorizontally(event) {
+  if (!challengeState.candles.length) return;
+  event.preventDefault();
+  const rect = challengeCanvas.getBoundingClientRect();
+  const plotWidth = rect.width - 58;
+  const pointerRatio = Math.max(0, Math.min(1, (event.clientX - rect.left - 38) / plotWidth));
+  const pointerIndex = challengeState.xStart + pointerRatio * challengeState.xCount;
+  const zoomFactor = Math.exp(event.deltaY * 0.0015);
+  const nextCount = Math.max(8, Math.min(challengeState.candles.length, challengeState.xCount * zoomFactor));
+  challengeState.xStart = Math.max(0, Math.min(challengeState.candles.length - nextCount, pointerIndex - pointerRatio * nextCount));
+  challengeState.xCount = nextCount;
+  drawChallengeChart();
+}
+
+function beginChallengeYAxisDrag(event) {
+  const rect = challengeCanvas.getBoundingClientRect();
+  if (event.clientX - rect.left > 38) return;
+  event.preventDefault();
+  challengeCanvas.setPointerCapture(event.pointerId);
+  challengeState.dragY = { pointerId: event.pointerId, startY: event.clientY, startZoom: challengeState.yZoom };
+  challengeCanvas.classList.add('dragging-y');
+}
+
+function dragChallengeYAxis(event) {
+  if (!challengeState.dragY || event.pointerId !== challengeState.dragY.pointerId) return;
+  const zoom = challengeState.dragY.startZoom * Math.exp((challengeState.dragY.startY - event.clientY) * 0.008);
+  challengeState.yZoom = Math.max(0.35, Math.min(16, zoom));
+  drawChallengeChart();
+}
+
+function endChallengeYAxisDrag(event) {
+  if (!challengeState.dragY || event.pointerId !== challengeState.dragY.pointerId) return;
+  challengeCanvas.releasePointerCapture(event.pointerId);
+  challengeState.dragY = null;
+  challengeCanvas.classList.remove('dragging-y');
+}
+
+function beginChallengeChartDrag(event) {
+  const rect = challengeCanvas.getBoundingClientRect();
+  const localX = event.clientX - rect.left;
+  if (localX <= 38 || !challengeState.candles.length) return;
+  event.preventDefault();
+  challengeCanvas.setPointerCapture(event.pointerId);
+  const scopedCandles = challengeState.candles.slice(Math.floor(challengeState.xStart), Math.ceil(challengeState.xStart + challengeState.xCount));
+  const values = (scopedCandles.length ? scopedCandles : challengeState.candles).flatMap(candle => [candle.low, candle.high]);
+  const dataMin = Math.min(...values);
+  const dataMax = Math.max(...values);
+  const dataRange = Math.max(2, (dataMax - dataMin) * 1.1);
+  challengeState.dragX = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startStart: challengeState.xStart, startCenter: challengeState.yCenter ?? (dataMin + dataMax) / 2, visibleRange: dataRange / challengeState.yZoom };
+  challengeCanvas.classList.add('dragging-x');
+}
+
+function dragChallengeChart(event) {
+  if (!challengeState.dragX || event.pointerId !== challengeState.dragX.pointerId) return;
+  const plotWidth = challengeCanvas.clientWidth - 58;
+  const indexDelta = (challengeState.dragX.startX - event.clientX) / plotWidth * challengeState.xCount;
+  challengeState.xStart = Math.max(0, Math.min(challengeState.candles.length - challengeState.xCount, challengeState.dragX.startStart + indexDelta));
+  const plotHeight = challengeCanvas.clientHeight - 52;
+  challengeState.yCenter = challengeState.dragX.startCenter + (event.clientY - challengeState.dragX.startY) / plotHeight * challengeState.dragX.visibleRange;
+  drawChallengeChart();
+}
+
+function endChallengeChartDrag(event) {
+  if (!challengeState.dragX || event.pointerId !== challengeState.dragX.pointerId) return;
+  challengeCanvas.releasePointerCapture(event.pointerId);
+  challengeState.dragX = null;
+  challengeCanvas.classList.remove('dragging-x');
+}
+
 async function loadPiece(pieceKey) {
   const piece = PIECES[pieceKey];
   state.playing = false;
@@ -503,10 +757,10 @@ async function loadPiece(pieceKey) {
     $('timeline').max = state.duration;
     state.time = 0;
     updateTimeLabel();
-    $('noteCount').textContent = `AUDIOVISUAL SPECS: ${state.notes.length} NOTES / ${state.candles.length} CANDLES`;
     $('statusLabel').textContent = 'READY';
     if ($('pieceTitleLabel')) $('pieceTitleLabel').textContent = piece.title;
     resizeCanvas();
+    updateFooterNotes();
   } catch (error) {
     state.duration = 0;
     state.time = 0;
@@ -514,8 +768,8 @@ async function loadPiece(pieceKey) {
     $('timeline').value = 0;
     $('timeLabel').textContent = '00:00 / 00:00';
     $('statusLabel').textContent = 'MIDI NOT FOUND';
-    $('noteCount').textContent = 'ADD MIDI BESIDE PIECES';
     draw();
+    updateFooterNotes();
   }
 }
 
@@ -680,22 +934,81 @@ if (piecePickerButton && piecePickerMenu) {
 }
 const themeToggle = $('themeToggle');
 if (themeToggle) {
-  themeToggle.onclick = () => { const night = document.body.classList.toggle('night'); themeToggle.textContent = night ? 'Day mode' : 'Night mode'; themeToggle.setAttribute('aria-pressed', String(night)); draw(); };
+  themeToggle.onclick = () => { const night = document.body.classList.toggle('night'); themeToggle.textContent = night ? 'Day mode' : 'Night mode'; themeToggle.setAttribute('aria-pressed', String(night)); draw(); drawChallengeChart(); };
+}
+const challengePiecePickerButton = $('challengePiecePickerButton');
+const challengePiecePickerMenu = $('challengePiecePickerMenu');
+if (challengePiecePickerButton && challengePiecePickerMenu) {
+  challengePiecePickerButton.onclick = event => {
+    event.stopPropagation();
+    const wrapper = challengePiecePickerButton.closest('.piece-menu');
+    const isOpen = !wrapper.classList.contains('open');
+    wrapper.classList.toggle('open', isOpen);
+    challengePiecePickerMenu.style.display = isOpen ? 'grid' : 'none';
+    challengePiecePickerButton.setAttribute('aria-expanded', String(isOpen));
+  };
+  challengePiecePickerMenu.onclick = event => {
+    event.stopPropagation();
+    const option = event.target.closest('[data-piece]');
+    if (!option || !option.dataset.piece) return;
+    chooseChallengePiece(option.dataset.piece);
+    const wrapper = challengePiecePickerButton.closest('.piece-menu');
+    wrapper.classList.remove('open');
+    challengePiecePickerMenu.style.display = 'none';
+    challengePiecePickerButton.setAttribute('aria-expanded', 'false');
+  };
+  document.addEventListener('click', event => {
+    const wrapper = challengePiecePickerButton.closest('.piece-menu');
+    if (wrapper.contains(event.target)) return;
+    wrapper.classList.remove('open');
+    challengePiecePickerMenu.style.display = 'none';
+    challengePiecePickerButton.setAttribute('aria-expanded', 'false');
+  });
+}
+if ($('challengePieceSelect')) {
+  $('challengePieceSelect').onchange = event => { if (event.target.value) syncChallengePieceSelector(); loadChallengePiece(event.target.value); };
 }
 const challengeButton = $('challengeButton');
 const backToChartButton = $('backToChartButton');
 if (challengeButton && backToChartButton) {
   challengeButton.onclick = () => {
-    document.body.querySelectorAll('main > :not(#challengeScreen)').forEach(section => { section.hidden = true; });
+    if (workbenchSection) workbenchSection.classList.add('frozen');
     const challengeScreen = $('challengeScreen');
     challengeScreen.hidden = false;
+    updateFooterNotes();
+    resizeChallengeCanvas();
     challengeScreen.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   backToChartButton.onclick = () => {
     $('challengeScreen').hidden = true;
-    document.body.querySelectorAll('main > :not(#challengeScreen)').forEach(section => { section.hidden = false; });
+    if (workbenchSection) workbenchSection.classList.remove('frozen');
+    updateFooterNotes();
     resizeCanvas();
   };
+}
+if (challengeCanvas) {
+  challengeCanvas.addEventListener('wheel', zoomChallengeHorizontally, { passive: false });
+  challengeCanvas.addEventListener('pointerdown', event => {
+    const rect = challengeCanvas.getBoundingClientRect();
+    if (event.clientX - rect.left <= 38) beginChallengeYAxisDrag(event);
+    else beginChallengeChartDrag(event);
+  });
+  challengeCanvas.addEventListener('pointermove', event => {
+    if (challengeState.dragY) dragChallengeYAxis(event);
+    else if (challengeState.dragX) dragChallengeChart(event);
+    else updateChallengeHoveredCandle(event);
+  });
+  challengeCanvas.addEventListener('pointerup', event => {
+    endChallengeYAxisDrag(event);
+    endChallengeChartDrag(event);
+  });
+  challengeCanvas.addEventListener('pointercancel', event => {
+    endChallengeYAxisDrag(event);
+    endChallengeChartDrag(event);
+  });
+  challengeCanvas.addEventListener('pointerleave', () => {
+    if (challengeState.hoverCandle !== null) { challengeState.hoverCandle = null; drawChallengeChart(); }
+  });
 }
 canvas.addEventListener('wheel', zoomHorizontally, { passive: false });
 canvas.addEventListener('pointerdown', event => {
@@ -719,7 +1032,7 @@ canvas.addEventListener('pointercancel', event => {
 canvas.addEventListener('pointerleave', () => {
   if (state.hoverCandle !== null) { state.hoverCandle = null; draw(); }
 });
-window.onresize = resizeCanvas;
+window.onresize = () => { resizeCanvas(); const challengeScreen = $('challengeScreen'); if (challengeScreen && !challengeScreen.hidden) resizeChallengeCanvas(); };
 window.onkeydown = event => {
   if (event.target.tagName === 'INPUT') return;
   if (event.code === 'Space') { event.preventDefault(); state.playing ? pause() : play(); }
