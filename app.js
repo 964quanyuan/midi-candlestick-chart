@@ -503,7 +503,7 @@ async function loadPiece(pieceKey) {
     $('timeline').max = state.duration;
     state.time = 0;
     updateTimeLabel();
-    $('noteCount').textContent = `${state.notes.length} NOTES / ${state.candles.length} CANDLES`;
+    $('noteCount').textContent = `AUDIOVISUAL SPECS: ${state.notes.length} NOTES / ${state.candles.length} CANDLES`;
     $('statusLabel').textContent = 'READY';
     if ($('pieceTitleLabel')) $('pieceTitleLabel').textContent = piece.title;
     resizeCanvas();
