@@ -38,6 +38,7 @@ const LOW_REGISTER_EXTRA_SUSTAIN = 1.8;
 const SUSTAIN_MULTIPLIER = 0.5;
 const VELOCITY_FLOOR = 0.25;
 const VELOCITY_CURVE = 1.7;
+const PAGE_TITLES = ['♭ar for ฿ar.', '𝄡ar for ฿ar.'];
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('chart');
@@ -46,6 +47,16 @@ const chartFrame = document.querySelector('.chart-frame');
 const controls = document.querySelector('.controls');
 const initialSeed = Math.floor(Math.random() * 4294967295) + 1;
 const state = { pieceKey: 'CTNRS', piece: PIECES.CTNRS, notes: [], chartNotes: [], candles: [], duration: 0, time: 0, seed: initialSeed, speed: 1, attack: 0.006, reverb: 0, panSensitivity: 1, hoverCandle: null, playing: false, paused: false, raf: 0, audio: null, audioBus: null, reverbBus: null, audioNoteIndex: 0, audioOrigin: 0, audioStart: 0, xStart: 0, xCount: 0, yZoom: 1, yCenter: null, dragY: null, dragX: null };
+
+function randomizePageTitle() {
+  state.pageTitle ??= PAGE_TITLES[Math.floor(Math.random() * PAGE_TITLES.length)];
+  document.title = state.pageTitle;
+  const heading = document.querySelector('h1');
+  if (heading) heading.textContent = state.pageTitle;
+}
+
+randomizePageTitle();
+document.addEventListener('DOMContentLoaded', randomizePageTitle);
 
 function syncControlsHeight() {
   if (window.matchMedia('(min-width: 851px)').matches) controls.style.height = `${chartFrame.getBoundingClientRect().height}px`;
