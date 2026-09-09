@@ -5,7 +5,7 @@ const PIECES = {
   CTNRS: { 
     ticker: 'CRTR: CTNRS', 
     file: 'pieces/catenaires.mid', 
-    candleSize: 6,
+    candleSize: 8,
     notesPerMeasure: 12,
     title: 'Two Thoughts About the Piano, No. 2: Caténaires - Elliott Carter', 
     silenceFirst: true },
