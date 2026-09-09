@@ -682,6 +682,21 @@ const themeToggle = $('themeToggle');
 if (themeToggle) {
   themeToggle.onclick = () => { const night = document.body.classList.toggle('night'); themeToggle.textContent = night ? 'Day mode' : 'Night mode'; themeToggle.setAttribute('aria-pressed', String(night)); draw(); };
 }
+const challengeButton = $('challengeButton');
+const backToChartButton = $('backToChartButton');
+if (challengeButton && backToChartButton) {
+  challengeButton.onclick = () => {
+    document.body.querySelectorAll('main > :not(#challengeScreen)').forEach(section => { section.hidden = true; });
+    const challengeScreen = $('challengeScreen');
+    challengeScreen.hidden = false;
+    challengeScreen.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  backToChartButton.onclick = () => {
+    $('challengeScreen').hidden = true;
+    document.body.querySelectorAll('main > :not(#challengeScreen)').forEach(section => { section.hidden = false; });
+    resizeCanvas();
+  };
+}
 canvas.addEventListener('wheel', zoomHorizontally, { passive: false });
 canvas.addEventListener('pointerdown', event => {
   const rect = canvas.getBoundingClientRect();
