@@ -164,6 +164,7 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-i
 .hotkey-row-label { text-align: left; }
 .hotkey-input { height: 30px; padding: 4px 6px; font: 500 11px 'DM Mono', monospace; letter-spacing: .02em; text-transform: none; text-align: center; }
 .hotkey-input.listening { border-color: var(--gold); color: var(--gold); }
+.hotkey-input:disabled { opacity: .4; cursor: not-allowed; }
 .trade-log { margin-top: 4px; overflow-x: auto; }
 .trade-log table { width: 100%; border-collapse: collapse; font: 500 11px 'DM Mono', monospace; }
 .trade-log th, .trade-log td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; color: var(--muted); }

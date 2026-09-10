@@ -874,6 +874,10 @@ function setBracketControlsEnabled(enabled) {
   document.querySelectorAll('.mode-option, .quantity-shortcuts button').forEach(button => { button.disabled = !enabled; });
 }
 
+function setHotkeyControlsEnabled(enabled) {
+  document.querySelectorAll('.hotkey-input').forEach(button => { button.disabled = !enabled; });
+}
+
 function setTradingControlsEnabled(enabled) {
   setOrderButtonsEnabled(enabled);
   setBracketControlsEnabled(enabled);
@@ -1003,6 +1007,7 @@ function resetChallengeChartState() {
   challengeState.bracketHitboxes = [];
   resetTradingState();
   setTradingControlsEnabled(false);
+  setHotkeyControlsEnabled(false);
   setChallengeTickerPickerEnabled(true);
   const pieceSelect = $('challengePieceSelect');
   if (pieceSelect) { pieceSelect.value = ''; syncChallengePieceSelector(); }
@@ -1159,6 +1164,7 @@ async function loadChallengePiece(pieceKey) {
   challengeState.hoverCandle = null;
   resetTradingState();
   setTradingControlsEnabled(false);
+  setHotkeyControlsEnabled(false);
   $('challengeStatusLabel').textContent = 'LOADING';
   resetChallengeMetricsDisplay();
   try {
@@ -1173,6 +1179,7 @@ async function loadChallengePiece(pieceKey) {
     $('challengeStatusLabel').textContent = 'READY';
     if ($('challengePieceTitleLabel')) $('challengePieceTitleLabel').textContent = piece.title;
     setBracketControlsEnabled(true);
+    setHotkeyControlsEnabled(true);
     resizeChallengeCanvas();
   } catch (error) {
     challengeState.candles = [];
@@ -1663,7 +1670,7 @@ if (challengeButton) {
       updateFooterNotes();
       resizeChallengeCanvas();
       updateChallengeButtonLabel();
-      challengeScreen.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      smoothScrollTo(challengeScreen.getBoundingClientRect().top + window.scrollY);
       enableChallengeScrollGuard();
       return;
     }
