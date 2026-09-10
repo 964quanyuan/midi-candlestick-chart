@@ -172,6 +172,7 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-i
 .trade-log td.short { color: var(--bearish); }
 .trade-log td.positive { color: var(--bullish); }
 .trade-log td.negative { color: var(--bearish); }
+.trade-log-total td { color: var(--ink); font-weight: 500; border-top: 1px solid var(--ink); border-bottom: none; text-transform: uppercase; letter-spacing: .06em; }
 .flatten-button { height: 26px; padding: 0 10px; }
 @media (max-width: 850px) { .masthead { display: block; } .statement { margin-top: 24px; } .workbench { grid-template-columns: 1fr; } .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; height: auto !important; } .theme-toggle { margin-top: 18px; } .readout { margin-top: 0; } }
 @media (max-width: 560px) { .shell { padding: 25px 18px; } h1 { font-size: 48px; } .workbench { padding-top: 23px; } .chart-frame { padding: 13px 12px 11px; } canvas { min-height: 290px; height: 55vh; } .controls { display: flex; } footer { line-height: 2; } }

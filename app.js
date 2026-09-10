@@ -497,6 +497,7 @@ const challengeCtx = challengeCanvas ? challengeCanvas.getContext('2d') : null;
 const workbenchSection = document.querySelector('section.workbench');
 const challengeState = { pieceKey: '', piece: null, notes: [], chartNotes: [], candles: [], seed: 42, duration: 0, time: 0, playing: false, started: false, finished: false, raf: 0, lastFrame: null, xStart: 0, xCount: 8, yZoom: 1, yCenter: null, hoverCandle: null, hoverPrice: null, dragX: null, dragY: null, dragOrder: null, dragBracket: null, pendingHitboxes: [], bracketHitboxes: [], speed: 1, attack: 0.006, reverb: 0, audio: null, audioBus: null, reverbBus: null, audioNoteIndex: 0, audioOrigin: 0, audioStart: 0, statusFlashTimer: null };
 const tradingState = { mode: 'netting', positions: [], pendingOrders: [], workingOrders: [], nextId: 1, balance: 1000 };
+const ROUND_TRIP_FEE_PER_UNIT = 1.5;
 const DEFAULT_HOTKEYS = { limitBuy: 'shift+b', limitSell: 'shift+s', stopBuy: 'ctrl+b', stopSell: 'ctrl+s', marketBuy: 'alt+b', marketSell: 'alt+s' };
 const hotkeys = { ...DEFAULT_HOTKEYS };
 let listeningHotkeyButton = null;
@@ -526,7 +527,8 @@ function closePosition(position, exitPrice, reason) {
   position.exitTime = challengeState.time;
   position.exitReason = reason;
   position.realizedPnl = computePnl(position.side, position.entryPrice, exitPrice, position.qty);
-  tradingState.balance += position.realizedPnl;
+  position.fee = position.qty * ROUND_TRIP_FEE_PER_UNIT;
+  tradingState.balance += position.realizedPnl - position.fee;
 }
 
 function fillOrder(order, price) {
@@ -552,13 +554,15 @@ function fillOrder(order, price) {
     closePosition(net, price, 'flatten');
   } else if (order.qty < net.qty) {
     const pnl = computePnl(net.side, net.entryPrice, price, order.qty);
+    const fee = order.qty * ROUND_TRIP_FEE_PER_UNIT;
     net.qty -= order.qty;
-    tradingState.balance += pnl;
-    tradingState.positions.push({ id: tradingState.nextId++, side: net.side, qty: order.qty, entryPrice: net.entryPrice, entryTime: net.entryTime, tp: null, sl: null, status: 'closed', exitPrice: price, exitTime: challengeState.time, exitReason: 'reduce', realizedPnl: pnl });
+    tradingState.balance += pnl - fee;
+    tradingState.positions.push({ id: tradingState.nextId++, side: net.side, qty: order.qty, entryPrice: net.entryPrice, entryTime: net.entryTime, tp: null, sl: null, status: 'closed', exitPrice: price, exitTime: challengeState.time, exitReason: 'reduce', realizedPnl: pnl, fee });
   } else {
     const pnl = computePnl(net.side, net.entryPrice, price, net.qty);
-    net.status = 'closed'; net.exitPrice = price; net.exitTime = challengeState.time; net.exitReason = 'flip'; net.realizedPnl = pnl;
-    tradingState.balance += pnl;
+    const fee = net.qty * ROUND_TRIP_FEE_PER_UNIT;
+    net.status = 'closed'; net.exitPrice = price; net.exitTime = challengeState.time; net.exitReason = 'flip'; net.realizedPnl = pnl; net.fee = fee;
+    tradingState.balance += pnl - fee;
     tradingState.positions.push({ id: tradingState.nextId++, side: incomingSide, qty: order.qty - net.qty, entryPrice: price, entryTime: challengeState.time, tp: order.tp, sl: order.sl, status: 'open', exitPrice: null, exitTime: null, exitReason: null, realizedPnl: null, netKey: 'net' });
   }
 }
@@ -716,14 +720,21 @@ function renderTradeLog() {
   if (!tbody) return;
   const currentPrice = getChallengeCurrentPrice();
   const workingRows = tradingState.workingOrders.map(order => {
-    return `<tr><td>${order.id}</td><td class="${order.side === 'buy' ? 'long' : 'short'}">${order.type.toUpperCase()} ${order.side.toUpperCase()}</td><td>${order.qty}</td><td>${order.price.toFixed(2)}</td><td>${order.tp != null ? order.tp.toFixed(2) : '\u2014'}</td><td>${order.sl != null ? order.sl.toFixed(2) : '\u2014'}</td><td>\u2014</td><td>\u2014</td><td>PENDING</td><td><button type="button" class="flatten-button" data-cancel-id="${order.id}">Cancel</button></td></tr>`;
+    return `<tr><td>${order.id}</td><td class="${order.side === 'buy' ? 'long' : 'short'}">${order.type.toUpperCase()} ${order.side.toUpperCase()}</td><td>${order.qty}</td><td>${order.price.toFixed(2)}</td><td>${order.tp != null ? order.tp.toFixed(2) : '\u2014'}</td><td>${order.sl != null ? order.sl.toFixed(2) : '\u2014'}</td><td>\u2014</td><td>\u2014</td><td>\u2014</td><td>PENDING</td><td><button type="button" class="flatten-button" data-cancel-id="${order.id}">Cancel</button></td></tr>`;
   }).join('');
   const positionRows = tradingState.positions.map(position => {
     const pnl = position.status === 'open' ? computePnl(position.side, position.entryPrice, currentPrice ?? position.entryPrice, position.qty) : position.realizedPnl;
     const flattenCell = position.status === 'open' ? `<button type="button" class="flatten-button" data-flatten-id="${position.id}">Flatten</button>` : '';
-    return `<tr><td>${position.id}</td><td class="${position.side}">${position.side === 'long' ? 'BUY' : 'SELL'}</td><td>${position.qty}</td><td>${position.entryPrice.toFixed(2)}</td><td>${position.tp != null ? position.tp.toFixed(2) : '\u2014'}</td><td>${position.sl != null ? position.sl.toFixed(2) : '\u2014'}</td><td>${position.exitPrice != null ? position.exitPrice.toFixed(2) : '\u2014'}</td><td class="${pnl >= 0 ? 'positive' : 'negative'}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</td><td>${position.status === 'open' ? 'OPEN' : position.exitReason.toUpperCase()}</td><td>${flattenCell}</td></tr>`;
+    return `<tr><td>${position.id}</td><td class="${position.side}">${position.side === 'long' ? 'BUY' : 'SELL'}</td><td>${position.qty}</td><td>${position.entryPrice.toFixed(2)}</td><td>${position.tp != null ? position.tp.toFixed(2) : '\u2014'}</td><td>${position.sl != null ? position.sl.toFixed(2) : '\u2014'}</td><td>${position.exitPrice != null ? position.exitPrice.toFixed(2) : '\u2014'}</td><td class="${pnl >= 0 ? 'positive' : 'negative'}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</td><td>${position.status === 'closed' ? position.fee.toFixed(2) : '\u2014'}</td><td>${position.status === 'open' ? 'OPEN' : position.exitReason.toUpperCase()}</td><td>${flattenCell}</td></tr>`;
   }).join('');
-  tbody.innerHTML = workingRows + positionRows;
+  let totalRow = '';
+  if (challengeState.finished) {
+    const totalRealized = tradingState.positions.reduce((sum, position) => sum + (position.status === 'closed' ? position.realizedPnl : 0), 0);
+    const totalFees = tradingState.positions.reduce((sum, position) => sum + (position.fee || 0), 0);
+    const netTotal = totalRealized - totalFees;
+    totalRow = `<tr class="trade-log-total"><td colspan="7">TOTAL</td><td class="${netTotal >= 0 ? 'positive' : 'negative'}">${netTotal >= 0 ? '+' : ''}${netTotal.toFixed(2)}</td><td>${totalFees.toFixed(2)}</td><td></td><td></td></tr>`;
+  }
+  tbody.innerHTML = workingRows + positionRows + totalRow;
 }
 
 function drawChallengeBracketLine(theme, y, plotLeft, plotRight, owner, field, level) {
