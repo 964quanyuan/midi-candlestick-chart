@@ -496,7 +496,7 @@ const challengeCanvas = $('challengeChart');
 const challengeCtx = challengeCanvas ? challengeCanvas.getContext('2d') : null;
 const workbenchSection = document.querySelector('section.workbench');
 const challengeState = { pieceKey: '', piece: null, notes: [], chartNotes: [], candles: [], seed: 42, duration: 0, time: 0, playing: false, started: false, finished: false, raf: 0, lastFrame: null, xStart: 0, xCount: 8, yZoom: 1, yCenter: null, hoverCandle: null, hoverPrice: null, dragX: null, dragY: null, dragOrder: null, dragBracket: null, pendingHitboxes: [], bracketHitboxes: [], speed: 1, attack: 0.006, reverb: 0, audio: null, audioBus: null, reverbBus: null, audioNoteIndex: 0, audioOrigin: 0, audioStart: 0, statusFlashTimer: null };
-const tradingState = { mode: 'netting', positions: [], pendingOrders: [], workingOrders: [], nextId: 1 };
+const tradingState = { mode: 'netting', positions: [], pendingOrders: [], workingOrders: [], nextId: 1, balance: 1000 };
 const DEFAULT_HOTKEYS = { limitBuy: 'shift+b', limitSell: 'shift+s', stopBuy: 'ctrl+b', stopSell: 'ctrl+s', marketBuy: 'alt+b', marketSell: 'alt+s' };
 const hotkeys = { ...DEFAULT_HOTKEYS };
 let listeningHotkeyButton = null;
@@ -526,6 +526,7 @@ function closePosition(position, exitPrice, reason) {
   position.exitTime = challengeState.time;
   position.exitReason = reason;
   position.realizedPnl = computePnl(position.side, position.entryPrice, exitPrice, position.qty);
+  tradingState.balance += position.realizedPnl;
 }
 
 function fillOrder(order, price) {
@@ -552,23 +553,44 @@ function fillOrder(order, price) {
   } else if (order.qty < net.qty) {
     const pnl = computePnl(net.side, net.entryPrice, price, order.qty);
     net.qty -= order.qty;
+    tradingState.balance += pnl;
     tradingState.positions.push({ id: tradingState.nextId++, side: net.side, qty: order.qty, entryPrice: net.entryPrice, entryTime: net.entryTime, tp: null, sl: null, status: 'closed', exitPrice: price, exitTime: challengeState.time, exitReason: 'reduce', realizedPnl: pnl });
   } else {
     const pnl = computePnl(net.side, net.entryPrice, price, net.qty);
     net.status = 'closed'; net.exitPrice = price; net.exitTime = challengeState.time; net.exitReason = 'flip'; net.realizedPnl = pnl;
+    tradingState.balance += pnl;
     tradingState.positions.push({ id: tradingState.nextId++, side: incomingSide, qty: order.qty - net.qty, entryPrice: price, entryTime: challengeState.time, tp: order.tp, sl: order.sl, status: 'open', exitPrice: null, exitTime: null, exitReason: null, realizedPnl: null, netKey: 'net' });
   }
+}
+
+function computeTotalUnrealizedPnl(currentPrice) {
+  return tradingState.positions.filter(position => position.status === 'open').reduce((sum, position) => sum + computePnl(position.side, position.entryPrice, currentPrice, position.qty), 0);
+}
+
+function updateChallengeAccountMetrics(currentPrice) {
+  const balanceValue = $('challengeBalanceValue');
+  const unrealizedValue = $('challengeUnrealizedPnlValue');
+  if (!balanceValue || !unrealizedValue) return;
+  const unrealized = currentPrice === null ? 0 : computeTotalUnrealizedPnl(currentPrice);
+  balanceValue.textContent = tradingState.balance.toFixed(2);
+  unrealizedValue.textContent = `${unrealized >= 0 ? '+' : ''}${unrealized.toFixed(2)}`;
+}
+
+function liquidateChallengeAccount(currentPrice) {
+  tradingState.positions.filter(position => position.status === 'open').forEach(position => closePosition(position, currentPrice, 'liquidated'));
+  tradingState.workingOrders = [];
+  flashChallengeStatus('ACCOUNT LIQUIDATED');
 }
 
 function processChallengeTick() {
   const currentPrice = getChallengeCurrentPrice();
   if (currentPrice === null) return;
+  const volatility = Number($('challengeVolatilityValue')?.textContent) || 0;
+  const slippage = 0.1 * volatility;
   if (tradingState.pendingOrders.length) {
     tradingState.pendingOrders.splice(0).forEach(order => fillOrder(order, currentPrice));
   }
   if (tradingState.workingOrders.length) {
-    const volatility = Number($('challengeVolatilityValue')?.textContent) || 0;
-    const slippage = 0.1 * volatility;
     const remaining = [];
     tradingState.workingOrders.forEach(order => {
       let triggered = false;
@@ -592,9 +614,16 @@ function processChallengeTick() {
     }
     if (position.sl !== null) {
       const slLevel = position.side === 'long' ? position.entryPrice - position.sl : position.entryPrice + position.sl;
-      if ((position.side === 'long' && currentPrice <= slLevel) || (position.side === 'short' && currentPrice >= slLevel)) closePosition(position, slLevel, 'sl');
+      if ((position.side === 'long' && currentPrice <= slLevel) || (position.side === 'short' && currentPrice >= slLevel)) {
+        const filledSlPrice = position.side === 'long' ? slLevel - slippage : slLevel + slippage;
+        closePosition(position, filledSlPrice, 'sl');
+      }
     }
   });
+  if (tradingState.balance + computeTotalUnrealizedPnl(currentPrice) <= 0 && tradingState.positions.some(position => position.status === 'open')) {
+    liquidateChallengeAccount(currentPrice);
+  }
+  updateChallengeAccountMetrics(currentPrice);
   renderTradeLog();
 }
 
@@ -697,7 +726,7 @@ function renderTradeLog() {
   tbody.innerHTML = workingRows + positionRows;
 }
 
-function drawChallengeBracketLine(theme, y, plotLeft, plotRight, position, field, level) {
+function drawChallengeBracketLine(theme, y, plotLeft, plotRight, owner, field, level) {
   const bullishColor = theme.getPropertyValue('--bullish').trim();
   const bearishColor = theme.getPropertyValue('--bearish').trim();
   const paper = theme.getPropertyValue('--paper').trim();
@@ -718,16 +747,17 @@ function drawChallengeBracketLine(theme, y, plotLeft, plotRight, position, field
   const label = `${field.toUpperCase()} ${level.toFixed(2)}`;
   challengeCtx.font = '10px DM Mono, monospace';
   const labelWidth = challengeCtx.measureText(label).width + 10;
+  const labelX = plotRight - labelWidth;
   challengeCtx.save();
   challengeCtx.globalAlpha = 0.85;
   challengeCtx.fillStyle = color;
-  challengeCtx.fillRect(plotLeft, py - 9, labelWidth, 18);
+  challengeCtx.fillRect(labelX, py - 9, labelWidth, 18);
   challengeCtx.globalAlpha = 1;
   challengeCtx.fillStyle = paper;
   challengeCtx.textAlign = 'left';
-  challengeCtx.fillText(label, plotLeft + 5, py + 4);
+  challengeCtx.fillText(label, labelX + 5, py + 4);
   challengeCtx.restore();
-  challengeState.bracketHitboxes.push({ positionId: position.id, field, lineTop: py - 6, lineBottom: py + 6 });
+  challengeState.bracketHitboxes.push({ ownerKind: owner.kind, ownerId: owner.id, field, lineTop: py - 6, lineBottom: py + 6 });
 }
 
 function drawChallengePositionLabels(theme, y, plotLeft, plotRight, currentPrice) {
@@ -759,11 +789,11 @@ function drawChallengePositionLabels(theme, y, plotLeft, plotRight, currentPrice
     challengeCtx.restore();
     if (position.tp != null) {
       const tpLevel = position.side === 'long' ? position.entryPrice + position.tp : position.entryPrice - position.tp;
-      drawChallengeBracketLine(theme, y, plotLeft, plotRight, position, 'tp', tpLevel);
+      drawChallengeBracketLine(theme, y, plotLeft, plotRight, { kind: 'position', id: position.id }, 'tp', tpLevel);
     }
     if (position.sl != null) {
       const slLevel = position.side === 'long' ? position.entryPrice - position.sl : position.entryPrice + position.sl;
-      drawChallengeBracketLine(theme, y, plotLeft, plotRight, position, 'sl', slLevel);
+      drawChallengeBracketLine(theme, y, plotLeft, plotRight, { kind: 'position', id: position.id }, 'sl', slLevel);
     }
   });
 }
@@ -811,6 +841,14 @@ function drawChallengePendingOrders(theme, y, plotLeft, plotRight) {
       lineBottom: py + 6,
       closeRect: { x: labelX + labelWidth - closeWidth, y: py - 9, w: closeWidth, h: 18 },
     });
+    if (order.tp != null) {
+      const tpLevel = order.side === 'buy' ? order.price + order.tp : order.price - order.tp;
+      drawChallengeBracketLine(theme, y, plotLeft, plotRight, { kind: 'order', id: order.id }, 'tp', tpLevel);
+    }
+    if (order.sl != null) {
+      const slLevel = order.side === 'buy' ? order.price - order.sl : order.price + order.sl;
+      drawChallengeBracketLine(theme, y, plotLeft, plotRight, { kind: 'order', id: order.id }, 'sl', slLevel);
+    }
   });
 }
 
@@ -841,10 +879,12 @@ function resetTradingState() {
   tradingState.pendingOrders = [];
   tradingState.workingOrders = [];
   tradingState.nextId = 1;
+  tradingState.balance = 1000;
   const qtyInput = $('positionQuantity'); if (qtyInput) qtyInput.value = 1;
   const tpInput = $('takeProfitInput'); if (tpInput) tpInput.value = '';
   const slInput = $('stopLossInput'); if (slInput) slInput.value = '';
   document.querySelectorAll('.mode-option').forEach(button => button.classList.toggle('active', button.dataset.mode === 'netting'));
+  updateChallengeAccountMetrics(getChallengeCurrentPrice() ?? 0);
   renderTradeLog();
 }
 
@@ -854,9 +894,8 @@ function updateChallengeButtonLabel() {
   const challengeScreen = $('challengeScreen');
   const inChallenge = challengeScreen && !challengeScreen.hidden;
   if (!inChallenge) { button.textContent = 'begin trading challenge'; button.disabled = false; return; }
+  if (challengeState.started) { button.textContent = 'quit trading challenge'; button.disabled = false; return; }
   if (!challengeState.piece || !challengeState.candles.length) { button.textContent = 'select a ticker to begin'; button.disabled = true; return; }
-  if (challengeState.finished) { button.textContent = 'challenge finished'; button.disabled = true; return; }
-  if (challengeState.started) { button.textContent = 'playing\u2026'; button.disabled = true; return; }
   button.textContent = 'play'; button.disabled = false;
 }
 
@@ -1269,25 +1308,29 @@ function endChallengeOrderDrag(event) {
   challengeCanvas.classList.remove('dragging-y');
 }
 
-function beginChallengeBracketDrag(event, positionId, field) {
+function beginChallengeBracketDrag(event, ownerKind, ownerId, field) {
   event.preventDefault();
   challengeCanvas.setPointerCapture(event.pointerId);
-  challengeState.dragBracket = { pointerId: event.pointerId, positionId, field };
+  challengeState.dragBracket = { pointerId: event.pointerId, ownerKind, ownerId, field };
   challengeCanvas.classList.add('dragging-y');
 }
 
 function dragChallengeBracket(event) {
   if (!challengeState.dragBracket || event.pointerId !== challengeState.dragBracket.pointerId) return;
-  const position = tradingState.positions.find(item => item.id === challengeState.dragBracket.positionId && item.status === 'open');
-  if (!position) { challengeState.dragBracket = null; return; }
+  const { ownerKind, ownerId, field } = challengeState.dragBracket;
+  const owner = ownerKind === 'position'
+    ? tradingState.positions.find(item => item.id === ownerId && item.status === 'open')
+    : tradingState.workingOrders.find(item => item.id === ownerId);
+  if (!owner) { challengeState.dragBracket = null; return; }
   const rect = challengeCanvas.getBoundingClientRect();
   const localY = event.clientY - rect.top;
   const level = getChallengePriceAtY(challengeCanvas.clientHeight, localY);
-  const field = challengeState.dragBracket.field;
+  const referencePrice = ownerKind === 'position' ? owner.entryPrice : owner.price;
+  const isLong = owner.side === 'long' || owner.side === 'buy';
   const offset = field === 'tp'
-    ? (position.side === 'long' ? level - position.entryPrice : position.entryPrice - level)
-    : (position.side === 'long' ? position.entryPrice - level : level - position.entryPrice);
-  position[field] = Math.max(0, offset);
+    ? (isLong ? level - referencePrice : referencePrice - level)
+    : (isLong ? referencePrice - level : level - referencePrice);
+  owner[field] = Math.max(0, offset);
   renderTradeLog();
   drawChallengeChart();
 }
@@ -1538,8 +1581,7 @@ if ($('challengePieceSelect')) {
   $('challengePieceSelect').onchange = event => { if (event.target.value) syncChallengePieceSelector(); loadChallengePiece(event.target.value); };
 }
 const challengeButton = $('challengeButton');
-const backToChartButton = $('backToChartButton');
-if (challengeButton && backToChartButton) {
+if (challengeButton) {
   challengeButton.onclick = () => {
     const challengeScreen = $('challengeScreen');
     const inChallenge = challengeScreen && !challengeScreen.hidden;
@@ -1553,15 +1595,16 @@ if (challengeButton && backToChartButton) {
       challengeScreen.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
-    if (!challengeState.piece || challengeState.started) return;
+    if (challengeState.started) {
+      challengeScreen.hidden = true;
+      if (workbenchSection) workbenchSection.classList.remove('frozen');
+      resetChallengeChartState();
+      updateFooterNotes();
+      resizeCanvas();
+      return;
+    }
+    if (!challengeState.piece) return;
     startChallengePlayback();
-  };
-  backToChartButton.onclick = () => {
-    $('challengeScreen').hidden = true;
-    if (workbenchSection) workbenchSection.classList.remove('frozen');
-    resetChallengeChartState();
-    updateFooterNotes();
-    resizeCanvas();
   };
 }
 $('buyButton').onclick = () => submitOrder('buy');
@@ -1617,7 +1660,7 @@ if (challengeCanvas) {
     const lineHit = challengeState.pendingHitboxes.find(box => localX > 38 && localY >= box.lineTop && localY <= box.lineBottom);
     if (lineHit) { beginChallengeOrderDrag(event, lineHit.id); return; }
     const bracketHit = challengeState.bracketHitboxes.find(box => localX > 38 && localY >= box.lineTop && localY <= box.lineBottom);
-    if (bracketHit) { beginChallengeBracketDrag(event, bracketHit.positionId, bracketHit.field); return; }
+    if (bracketHit) { beginChallengeBracketDrag(event, bracketHit.ownerKind, bracketHit.ownerId, bracketHit.field); return; }
     if (localX <= 38) beginChallengeYAxisDrag(event);
     else beginChallengeChartDrag(event);
   });
