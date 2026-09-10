@@ -495,7 +495,7 @@ function updateFooterNotes() {
 const challengeCanvas = $('challengeChart');
 const challengeCtx = challengeCanvas ? challengeCanvas.getContext('2d') : null;
 const workbenchSection = document.querySelector('section.workbench');
-const challengeState = { pieceKey: '', piece: null, notes: [], chartNotes: [], candles: [], seed: 42, duration: 0, time: 0, playing: false, started: false, finished: false, raf: 0, lastFrame: null, xStart: 0, xCount: 8, yZoom: 1, yCenter: null, hoverCandle: null, hoverPrice: null, dragX: null, dragY: null, dragOrder: null, dragBracket: null, pendingHitboxes: [], bracketHitboxes: [], speed: 1, attack: 0.006, reverb: 0, audio: null, audioBus: null, reverbBus: null, audioNoteIndex: 0, audioOrigin: 0, audioStart: 0, statusFlashTimer: null };
+const challengeState = { pieceKey: '', piece: null, notes: [], chartNotes: [], candles: [], seed: 42, duration: 0, time: 0, playing: false, started: false, finished: false, raf: 0, lastFrame: null, xStart: 0, xCount: 8, yMin: -100, yMax: 100, hoverCandle: null, hoverPrice: null, dragX: null, dragY: null, dragOrder: null, dragBracket: null, pendingHitboxes: [], bracketHitboxes: [], speed: 1, attack: 0.006, reverb: 0, audio: null, audioBus: null, reverbBus: null, audioNoteIndex: 0, audioOrigin: 0, audioStart: 0, statusFlashTimer: null };
 const tradingState = { mode: 'netting', positions: [], pendingOrders: [], workingOrders: [], nextId: 1, balance: 1000 };
 const ROUND_TRIP_FEE_PER_UNIT = 1.5;
 const DEFAULT_HOTKEYS = { limitBuy: 'shift+b', limitSell: 'shift+s', stopBuy: 'ctrl+b', stopSell: 'ctrl+s', marketBuy: 'alt+b', marketSell: 'alt+s' };
@@ -578,6 +578,8 @@ function updateChallengeAccountMetrics(currentPrice) {
   const unrealized = currentPrice === null ? 0 : computeTotalUnrealizedPnl(currentPrice);
   balanceValue.textContent = tradingState.balance.toFixed(2);
   unrealizedValue.textContent = `${unrealized >= 0 ? '+' : ''}${unrealized.toFixed(2)}`;
+  const theme = getComputedStyle(document.body);
+  unrealizedValue.style.color = theme.getPropertyValue(unrealized >= 0 ? '--bullish' : '--bearish').trim();
 }
 
 function liquidateChallengeAccount(currentPrice) {
@@ -725,14 +727,14 @@ function renderTradeLog() {
   const positionRows = tradingState.positions.map(position => {
     const pnl = position.status === 'open' ? computePnl(position.side, position.entryPrice, currentPrice ?? position.entryPrice, position.qty) : position.realizedPnl;
     const flattenCell = position.status === 'open' ? `<button type="button" class="flatten-button" data-flatten-id="${position.id}">Flatten</button>` : '';
-    return `<tr><td>${position.id}</td><td class="${position.side}">${position.side === 'long' ? 'BUY' : 'SELL'}</td><td>${position.qty}</td><td>${position.entryPrice.toFixed(2)}</td><td>${position.tp != null ? position.tp.toFixed(2) : '\u2014'}</td><td>${position.sl != null ? position.sl.toFixed(2) : '\u2014'}</td><td>${position.exitPrice != null ? position.exitPrice.toFixed(2) : '\u2014'}</td><td class="${pnl >= 0 ? 'positive' : 'negative'}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</td><td>${position.status === 'closed' ? position.fee.toFixed(2) : '\u2014'}</td><td>${position.status === 'open' ? 'OPEN' : position.exitReason.toUpperCase()}</td><td>${flattenCell}</td></tr>`;
+    return `<tr><td>${position.id}</td><td class="${position.side}">${position.side === 'long' ? 'BUY' : 'SELL'}</td><td>${position.qty}</td><td>${position.entryPrice.toFixed(2)}</td><td>${position.tp != null ? position.tp.toFixed(2) : '\u2014'}</td><td>${position.sl != null ? position.sl.toFixed(2) : '\u2014'}</td><td>${position.exitPrice != null ? position.exitPrice.toFixed(2) : '\u2014'}</td><td class="${pnl >= 0 ? 'positive' : 'negative'}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</td><td class="negative">${position.status === 'closed' ? `-${position.fee.toFixed(2)}` : '\u2014'}</td><td>${position.status === 'open' ? 'OPEN' : position.exitReason.toUpperCase()}</td><td>${flattenCell}</td></tr>`;
   }).join('');
   let totalRow = '';
   if (challengeState.finished) {
     const totalRealized = tradingState.positions.reduce((sum, position) => sum + (position.status === 'closed' ? position.realizedPnl : 0), 0);
     const totalFees = tradingState.positions.reduce((sum, position) => sum + (position.fee || 0), 0);
     const netTotal = totalRealized - totalFees;
-    totalRow = `<tr class="trade-log-total"><td colspan="7">TOTAL</td><td class="${netTotal >= 0 ? 'positive' : 'negative'}">${netTotal >= 0 ? '+' : ''}${netTotal.toFixed(2)}</td><td>${totalFees.toFixed(2)}</td><td></td><td></td></tr>`;
+    totalRow = `<tr class="trade-log-total"><td colspan="7">TOTAL</td><td class="${totalRealized >= 0 ? 'positive' : 'negative'}">${totalRealized >= 0 ? '+' : ''}${totalRealized.toFixed(2)}</td><td class="negative">-${totalFees.toFixed(2)}</td><td>=</td><td class="${netTotal >= 0 ? 'positive' : 'negative'}">${netTotal.toFixed(2)}</td></tr>`;
   }
   tbody.innerHTML = workingRows + positionRows + totalRow;
 }
@@ -789,7 +791,7 @@ function drawChallengePositionLabels(theme, y, plotLeft, plotRight, currentPrice
     challengeCtx.stroke();
     challengeCtx.setLineDash([]);
     const pnl = computePnl(position.side, position.entryPrice, currentPrice, position.qty);
-    const label = `${position.side === 'long' ? 'L' : 'S'}${position.qty} ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}`;
+    const label = `${position.side === 'long' ? 'B' : 'S'}${position.qty} ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}`;
     challengeCtx.font = '10px DM Mono, monospace';
     const labelWidth = challengeCtx.measureText(label).width + 10;
     challengeCtx.fillStyle = color;
@@ -915,6 +917,8 @@ function finishChallengePlayback() {
   challengeState.finished = true;
   const finalPrice = getChallengeCurrentPrice();
   if (finalPrice !== null) tradingState.positions.filter(position => position.status === 'open').forEach(position => closePosition(position, finalPrice, 'session-end'));
+  tradingState.workingOrders = [];
+  challengeState.pendingHitboxes = [];
   renderTradeLog();
   setTradingControlsEnabled(false);
   updateChallengeButtonLabel();
@@ -963,6 +967,16 @@ function closeChallengeAudio() {
   challengeState.reverbBus = null;
 }
 
+function resetChallengeMetricsDisplay() {
+  ['challengeOpenValue', 'challengeHighValue', 'challengeLowValue', 'challengeCloseValue'].forEach(id => { const el = $(id); if (el) el.textContent = '0.00'; });
+  const readout = $('challengeOpenValue')?.closest('.ohlc-readout');
+  if (readout) { readout.style.color = ''; readout.classList.remove('candle-color'); }
+  if ($('challengeVolatilityValue')) $('challengeVolatilityValue').textContent = '0.00';
+  if ($('challengePitchDeltaAverageValue')) $('challengePitchDeltaAverageValue').textContent = '0.00';
+  if ($('challengeRsiValue')) $('challengeRsiValue').textContent = '50.00';
+  if ($('challengeMeasureLabel')) $('challengeMeasureLabel').textContent = 'MEASURE 01 / CANDLE 01';
+}
+
 function resetChallengeChartState() {
   cancelAnimationFrame(challengeState.raf);
   closeChallengeAudio();
@@ -979,8 +993,8 @@ function resetChallengeChartState() {
   challengeState.lastFrame = null;
   challengeState.xStart = 0;
   challengeState.xCount = 8;
-  challengeState.yZoom = 1;
-  challengeState.yCenter = null;
+  challengeState.yMin = -100;
+  challengeState.yMax = 100;
   challengeState.hoverCandle = null;
   challengeState.hoverPrice = null;
   challengeState.dragOrder = null;
@@ -994,6 +1008,7 @@ function resetChallengeChartState() {
   if (pieceSelect) { pieceSelect.value = ''; syncChallengePieceSelector(); }
   if ($('challengePieceTitleLabel')) $('challengePieceTitleLabel').textContent = '';
   if ($('challengeStatusLabel')) $('challengeStatusLabel').textContent = 'SELECT';
+  resetChallengeMetricsDisplay();
   updateChallengeButtonLabel();
   drawChallengeChart();
 }
@@ -1046,10 +1061,11 @@ function drawChallengeChart() {
   const width = challengeCanvas.clientWidth, height = challengeCanvas.clientHeight;
   challengeCtx.clearRect(0, 0, width, height);
   if (!challengeState.candles.length) { challengeState.pendingHitboxes = []; challengeState.bracketHitboxes = []; return; }
-  const visibleValues = challengeState.candles.slice(Math.floor(challengeState.xStart), Math.ceil(challengeState.xStart + challengeState.xCount)).flatMap(candle => [candle.low, candle.high]);
-  const values = visibleValues.length ? visibleValues : challengeState.candles.flatMap(candle => [candle.low, candle.high]);
-  const dataMin = Math.min(...values), dataMax = Math.max(...values), dataRange = Math.max(2, (dataMax - dataMin) * 1.1);
-  const center = challengeState.yCenter ?? (dataMin + dataMax) / 2, visibleRange = dataRange / challengeState.yZoom, min = center - visibleRange / 2;
+  const activeInfo = getChallengeActiveCandle();
+  const activeIndex = activeInfo.activeIndex;
+  const completed = activeInfo.completed;
+  const active = activeInfo.active;
+  const min = challengeState.yMin, visibleRange = challengeState.yMax - challengeState.yMin;
   const plotWidth = width - 58, slot = plotWidth / Math.max(1, challengeState.xCount);
   const y = value => height - 28 - ((value - min) / visibleRange) * (height - 52);
   const x = index => 38 + (index - challengeState.xStart + 0.5) * slot;
@@ -1068,10 +1084,6 @@ function drawChallengeChart() {
   const bearishColor = theme.getPropertyValue('--bearish').trim();
   const plotLeft = 38, plotRight = width - 10, plotTop = 0, plotBottom = height - 28;
   const candleGlow = document.body.classList.contains('night');
-  const activeInfo = getChallengeActiveCandle();
-  const activeIndex = activeInfo.activeIndex;
-  const completed = activeInfo.completed;
-  const active = activeInfo.active;
   challengeCtx.save();
   challengeCtx.beginPath();
   challengeCtx.rect(plotLeft, plotTop, plotRight - plotLeft, plotBottom - plotTop);
@@ -1142,15 +1154,17 @@ async function loadChallengePiece(pieceKey) {
   challengeState.lastFrame = null;
   challengeState.xStart = 0;
   challengeState.xCount = 8;
-  challengeState.yZoom = 1;
-  challengeState.yCenter = null;
+  challengeState.yMin = -100;
+  challengeState.yMax = 100;
   challengeState.hoverCandle = null;
   resetTradingState();
   setTradingControlsEnabled(false);
   $('challengeStatusLabel').textContent = 'LOADING';
+  resetChallengeMetricsDisplay();
   try {
     const response = await fetch(piece.file);
     if (!response.ok) throw new Error(`Unable to load ${piece.file}`);
+    challengeState.seed = Math.floor(Math.random() * 4294967295) + 1;
     challengeState.notes = applyPieceSpecificAudio(parseMidi(await response.arrayBuffer()), piece);
     challengeState.chartNotes = selectFormationNotes(challengeState.notes, seededRandom(challengeState.seed));
     challengeState.duration = challengeState.notes.at(-1)?.time || 0;
@@ -1193,12 +1207,8 @@ function chooseChallengePiece(pieceKey) {
 }
 
 function getChallengePriceAtY(canvasHeight, localY) {
-  const visibleValues = challengeState.candles.slice(Math.floor(challengeState.xStart), Math.ceil(challengeState.xStart + challengeState.xCount)).flatMap(candle => [candle.low, candle.high]);
-  const values = visibleValues.length ? visibleValues : challengeState.candles.flatMap(candle => [candle.low, candle.high]);
-  const dataMin = Math.min(...values), dataMax = Math.max(...values), dataRange = Math.max(2, (dataMax - dataMin) * 1.1);
-  const center = challengeState.yCenter ?? (dataMin + dataMax) / 2;
-  const visibleRange = dataRange / challengeState.yZoom;
-  const min = center - visibleRange / 2;
+  const min = challengeState.yMin;
+  const visibleRange = challengeState.yMax - challengeState.yMin;
   return min + (canvasHeight - 28 - localY) * visibleRange / (canvasHeight - 52);
 }
 
@@ -1244,14 +1254,18 @@ function beginChallengeYAxisDrag(event) {
   if (event.clientX - rect.left > 38) return;
   event.preventDefault();
   challengeCanvas.setPointerCapture(event.pointerId);
-  challengeState.dragY = { pointerId: event.pointerId, startY: event.clientY, startZoom: challengeState.yZoom };
+  challengeState.dragY = { pointerId: event.pointerId, startY: event.clientY, startMin: challengeState.yMin, startMax: challengeState.yMax };
   challengeCanvas.classList.add('dragging-y');
 }
 
 function dragChallengeYAxis(event) {
   if (!challengeState.dragY || event.pointerId !== challengeState.dragY.pointerId) return;
-  const zoom = challengeState.dragY.startZoom * Math.exp((challengeState.dragY.startY - event.clientY) * 0.008);
-  challengeState.yZoom = Math.max(0.35, Math.min(16, zoom));
+  const center = (challengeState.dragY.startMin + challengeState.dragY.startMax) / 2;
+  const startRange = challengeState.dragY.startMax - challengeState.dragY.startMin;
+  const factor = Math.exp((challengeState.dragY.startY - event.clientY) * 0.008);
+  const newRange = Math.max(5, Math.min(5000, startRange / factor));
+  challengeState.yMin = center - newRange / 2;
+  challengeState.yMax = center + newRange / 2;
   drawChallengeChart();
 }
 
@@ -1268,12 +1282,7 @@ function beginChallengeChartDrag(event) {
   if (localX <= 38 || !challengeState.candles.length) return;
   event.preventDefault();
   challengeCanvas.setPointerCapture(event.pointerId);
-  const scopedCandles = challengeState.candles.slice(Math.floor(challengeState.xStart), Math.ceil(challengeState.xStart + challengeState.xCount));
-  const values = (scopedCandles.length ? scopedCandles : challengeState.candles).flatMap(candle => [candle.low, candle.high]);
-  const dataMin = Math.min(...values);
-  const dataMax = Math.max(...values);
-  const dataRange = Math.max(2, (dataMax - dataMin) * 1.1);
-  challengeState.dragX = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startStart: challengeState.xStart, startCenter: challengeState.yCenter ?? (dataMin + dataMax) / 2, visibleRange: dataRange / challengeState.yZoom };
+  challengeState.dragX = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startStart: challengeState.xStart, startMin: challengeState.yMin, startMax: challengeState.yMax };
   challengeCanvas.classList.add('dragging-x');
 }
 
@@ -1283,7 +1292,10 @@ function dragChallengeChart(event) {
   const indexDelta = (challengeState.dragX.startX - event.clientX) / plotWidth * challengeState.xCount;
   challengeState.xStart = Math.max(0, Math.min(challengeState.candles.length - challengeState.xCount, challengeState.dragX.startStart + indexDelta));
   const plotHeight = challengeCanvas.clientHeight - 52;
-  challengeState.yCenter = challengeState.dragX.startCenter + (event.clientY - challengeState.dragX.startY) / plotHeight * challengeState.dragX.visibleRange;
+  const range = challengeState.dragX.startMax - challengeState.dragX.startMin;
+  const shift = (event.clientY - challengeState.dragX.startY) / plotHeight * range;
+  challengeState.yMin = challengeState.dragX.startMin + shift;
+  challengeState.yMax = challengeState.dragX.startMax + shift;
   drawChallengeChart();
 }
 
@@ -1333,15 +1345,21 @@ function dragChallengeBracket(event) {
     ? tradingState.positions.find(item => item.id === ownerId && item.status === 'open')
     : tradingState.workingOrders.find(item => item.id === ownerId);
   if (!owner) { challengeState.dragBracket = null; return; }
+  const currentPrice = getChallengeCurrentPrice();
+  if (currentPrice === null) return;
   const rect = challengeCanvas.getBoundingClientRect();
   const localY = event.clientY - rect.top;
-  const level = getChallengePriceAtY(challengeCanvas.clientHeight, localY);
+  let level = getChallengePriceAtY(challengeCanvas.clientHeight, localY);
   const referencePrice = ownerKind === 'position' ? owner.entryPrice : owner.price;
   const isLong = owner.side === 'long' || owner.side === 'buy';
+  // TP behaves like a closing limit order, SL like a closing stop order: both are only
+  // constrained by the current price, so either can legally sit on either side of entry.
+  if (field === 'tp') level = isLong ? Math.max(level, currentPrice) : Math.min(level, currentPrice);
+  else level = isLong ? Math.min(level, currentPrice) : Math.max(level, currentPrice);
   const offset = field === 'tp'
     ? (isLong ? level - referencePrice : referencePrice - level)
     : (isLong ? referencePrice - level : level - referencePrice);
-  owner[field] = Math.max(0, offset);
+  owner[field] = offset;
   renderTradeLog();
   drawChallengeChart();
 }
