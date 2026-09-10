@@ -159,6 +159,7 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-i
 .bar-control .unit { color: var(--muted); }
 .quantity-shortcuts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 10px; }
 .quantity-shortcuts button { height: 32px; padding: 0; }
+.quantity-shortcuts button:disabled { opacity: .4; cursor: not-allowed; }
 .hotkey-grid { display: grid; grid-template-columns: auto 1fr 1fr; gap: 6px 8px; align-items: center; margin-top: 10px; }
 .hotkey-col-label, .hotkey-row-label { font: 500 10px 'DM Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; }
 .hotkey-row-label { text-align: left; }
