@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>𝄡ar for ฿ar.</title>
-  <link rel="stylesheet" href="styles.css?v=20260909">
+  <link rel="stylesheet" href="styles.css?v=20260909e">
 </head>
 <body>
   <main class="shell">
@@ -149,11 +149,70 @@
           </div>
         </div>
         <aside class="controls challenge-controls">
+          <div class="control-block trade-block">
+            <div class="trade-buttons">
+              <button id="buyButton" class="buy-button" type="button" disabled>Buy</button>
+              <button id="sellButton" class="sell-button" type="button" disabled>Sell</button>
+            </div>
+            <div class="position-mode">
+              <span>Position mode</span>
+              <div class="mode-toggle">
+                <button type="button" class="mode-option active" data-mode="netting" disabled>Netting</button>
+                <button type="button" class="mode-option" data-mode="hedging" disabled>Hedging</button>
+              </div>
+            </div>
+            <div class="bar-control inline-field">
+              <label for="positionQuantity">position quantity</label>
+              <input id="positionQuantity" type="number" min="1" step="1" value="1" disabled>
+            </div>
+            <div class="quantity-shortcuts">
+              <button type="button" data-qty="1" disabled>1</button>
+              <button type="button" data-qty="2" disabled>2</button>
+              <button type="button" data-qty="3" disabled>3</button>
+              <button type="button" data-qty="4" disabled>4</button>
+              <button type="button" data-qty="5" disabled>5</button>
+            </div>
+          </div>
+          <div class="control-block hotkeys-block">
+            <span class="section-label">Hotkeys</span>
+            <div class="hotkey-grid">
+              <span></span><span class="hotkey-col-label">Buy</span><span class="hotkey-col-label">Sell</span>
+              <span class="hotkey-row-label">Limit</span>
+              <button type="button" class="hotkey-input" data-hotkey="limitBuy">Shift+B</button>
+              <button type="button" class="hotkey-input" data-hotkey="limitSell">Shift+S</button>
+              <span class="hotkey-row-label">Stop</span>
+              <button type="button" class="hotkey-input" data-hotkey="stopBuy">Ctrl+B</button>
+              <button type="button" class="hotkey-input" data-hotkey="stopSell">Ctrl+S</button>
+              <span class="hotkey-row-label">Market</span>
+              <button type="button" class="hotkey-input" data-hotkey="marketBuy">Alt+B</button>
+              <button type="button" class="hotkey-input" data-hotkey="marketSell">Alt+S</button>
+            </div>
+          </div>
+          <div class="control-block bracket-block">
+            <span class="section-label">Bracket</span>
+            <div class="bar-control inline-field">
+              <label for="takeProfitInput">take profit <span class="unit">(semitones)</span></label>
+              <input id="takeProfitInput" type="number" min="0" step="0.5" placeholder="off" disabled>
+            </div>
+            <div class="bar-control inline-field">
+              <label for="stopLossInput">stop loss <span class="unit">(semitones)</span></label>
+              <input id="stopLossInput" type="number" min="0" step="0.5" placeholder="off" disabled>
+            </div>
+          </div>
           <button id="backToChartButton" class="theme-toggle" type="button">back to chart visualizer</button>
         </aside>
       </div>
+      <div class="trade-log">
+        <span class="section-label">Trade log</span>
+        <table>
+          <thead>
+            <tr><th>#</th><th>Side</th><th>Qty</th><th>Entry</th><th>TP</th><th>SL</th><th>Exit</th><th>P&amp;L</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody id="tradeLogBody"></tbody>
+        </table>
+      </div>
     </section>
   </main>
-  <script src="app.js?v=20260909"></script>
+  <script src="app.js?v=20260909g"></script>
 </body>
 </html>

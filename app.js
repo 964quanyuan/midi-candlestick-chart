@@ -375,9 +375,9 @@ function getLowRegisterFactor(pitch) {
   return Math.max(0, Math.min(1, (FULL_VOLUME_PITCH - pitch) / (FULL_VOLUME_PITCH - LOW_REGISTER_PITCH)));
 }
 
-function createPianoVoice(note, startTime) {
+function createPianoVoice(note, startTime, target = state) {
   if (note.silent) return;
-  const context = state.audio;
+  const context = target.audio;
   const frequency = 440 * Math.pow(2, (note.pitch - 69) / 12);
   const lowRegisterFactor = getLowRegisterFactor(note.pitch);
   const volumeMultiplier = Math.pow(10, (lowRegisterFactor * LOW_REGISTER_BOOST_DB) / 20);
@@ -391,10 +391,10 @@ function createPianoVoice(note, startTime) {
   filter.frequency.setValueAtTime(Math.min(9000, frequency * 13), startTime);
   filter.Q.value = 0.7;
   output.gain.setValueAtTime(0.0001, startTime);
-  output.gain.exponentialRampToValueAtTime(loudness, startTime + state.attack);
+  output.gain.exponentialRampToValueAtTime(loudness, startTime + target.attack);
   output.gain.exponentialRampToValueAtTime(loudness * 0.32, startTime + sustain * 0.18);
   output.gain.exponentialRampToValueAtTime(0.0001, startTime + sustain);
-  filter.connect(output).connect(state.audioBus || context.destination);
+  filter.connect(output).connect(target.audioBus || context.destination);
 
   const partials = [
     [1, 0.78, 'triangle'],
@@ -420,46 +420,46 @@ function createPianoVoice(note, startTime) {
   hammer.buffer = noise;
   const hammerGain = context.createGain();
   hammerGain.gain.setValueAtTime(0.018 * velocityGain, startTime);
-  hammerGain.gain.exponentialRampToValueAtTime(0.0001, startTime + Math.max(0.035, state.attack * 5));
+  hammerGain.gain.exponentialRampToValueAtTime(0.0001, startTime + Math.max(0.035, target.attack * 5));
   hammer.connect(hammerGain).connect(filter);
   hammer.start(startTime);
 }
 
-function scheduleAudioNotes() {
-  if (!state.audio) return;
-  const contextTime = state.audio.currentTime;
-  const audioElapsed = Math.max(0, contextTime - state.audioStart);
-  const scheduledUntil = Math.min(state.duration, state.audioOrigin + (audioElapsed + AUDIO_LOOKAHEAD) * state.speed);
-  while (state.audioNoteIndex < state.notes.length && state.notes[state.audioNoteIndex].time <= scheduledUntil) {
-    const note = state.notes[state.audioNoteIndex];
-    const startTime = state.audioStart + (note.time - state.audioOrigin) / state.speed;
-    if (startTime >= contextTime - 0.01) createPianoVoice(note, startTime);
-    state.audioNoteIndex += 1;
+function scheduleAudioNotes(target = state) {
+  if (!target.audio) return;
+  const contextTime = target.audio.currentTime;
+  const audioElapsed = Math.max(0, contextTime - target.audioStart);
+  const scheduledUntil = Math.min(target.duration, target.audioOrigin + (audioElapsed + AUDIO_LOOKAHEAD) * target.speed);
+  while (target.audioNoteIndex < target.notes.length && target.notes[target.audioNoteIndex].time <= scheduledUntil) {
+    const note = target.notes[target.audioNoteIndex];
+    const startTime = target.audioStart + (note.time - target.audioOrigin) / target.speed;
+    if (startTime >= contextTime - 0.01) createPianoVoice(note, startTime, target);
+    target.audioNoteIndex += 1;
   }
 }
 
-function setupAudio() {
-  state.audio = new (window.AudioContext || window.webkitAudioContext)();
-  const input = state.audio.createGain();
-  const dry = state.audio.createGain();
-  const convolver = state.audio.createConvolver();
-  const wet = state.audio.createGain();
-  const impulse = state.audio.createBuffer(2, state.audio.sampleRate * 2, state.audio.sampleRate);
+function setupAudio(target = state) {
+  target.audio = new (window.AudioContext || window.webkitAudioContext)();
+  const input = target.audio.createGain();
+  const dry = target.audio.createGain();
+  const convolver = target.audio.createConvolver();
+  const wet = target.audio.createGain();
+  const impulse = target.audio.createBuffer(2, target.audio.sampleRate * 2, target.audio.sampleRate);
   for (let channel = 0; channel < impulse.numberOfChannels; channel += 1) {
     const data = impulse.getChannelData(channel);
     for (let index = 0; index < data.length; index += 1) data[index] = (Math.random() * 2 - 1) * Math.pow(1 - index / data.length, 2.4);
   }
   convolver.buffer = impulse;
-  wet.gain.value = state.reverb;
-  input.connect(dry).connect(state.audio.destination);
-  input.connect(convolver).connect(wet).connect(state.audio.destination);
-  state.audioBus = input;
-  state.reverbBus = wet;
-  state.audioOrigin = state.time;
-  state.audioStart = state.audio.currentTime + 0.04;
-  state.audioNoteIndex = state.notes.findIndex(note => note.time >= state.time);
-  if (state.audioNoteIndex < 0) state.audioNoteIndex = state.notes.length;
-  scheduleAudioNotes();
+  wet.gain.value = target.reverb;
+  input.connect(dry).connect(target.audio.destination);
+  input.connect(convolver).connect(wet).connect(target.audio.destination);
+  target.audioBus = input;
+  target.reverbBus = wet;
+  target.audioOrigin = target.time;
+  target.audioStart = target.audio.currentTime + 0.04;
+  target.audioNoteIndex = target.notes.findIndex(note => note.time >= target.time);
+  if (target.audioNoteIndex < 0) target.audioNoteIndex = target.notes.length;
+  scheduleAudioNotes(target);
 }
 
 function resetChartPan() {
@@ -495,7 +495,458 @@ function updateFooterNotes() {
 const challengeCanvas = $('challengeChart');
 const challengeCtx = challengeCanvas ? challengeCanvas.getContext('2d') : null;
 const workbenchSection = document.querySelector('section.workbench');
-const challengeState = { pieceKey: '', piece: null, notes: [], candles: [], seed: 42, xStart: 0, xCount: 8, yZoom: 1, yCenter: null, hoverCandle: null, dragX: null, dragY: null };
+const challengeState = { pieceKey: '', piece: null, notes: [], chartNotes: [], candles: [], seed: 42, duration: 0, time: 0, playing: false, started: false, finished: false, raf: 0, lastFrame: null, xStart: 0, xCount: 8, yZoom: 1, yCenter: null, hoverCandle: null, hoverPrice: null, dragX: null, dragY: null, dragOrder: null, dragBracket: null, pendingHitboxes: [], bracketHitboxes: [], speed: 1, attack: 0.006, reverb: 0, audio: null, audioBus: null, reverbBus: null, audioNoteIndex: 0, audioOrigin: 0, audioStart: 0, statusFlashTimer: null };
+const tradingState = { mode: 'netting', positions: [], pendingOrders: [], workingOrders: [], nextId: 1 };
+const DEFAULT_HOTKEYS = { limitBuy: 'shift+b', limitSell: 'shift+s', stopBuy: 'ctrl+b', stopSell: 'ctrl+s', marketBuy: 'alt+b', marketSell: 'alt+s' };
+const hotkeys = { ...DEFAULT_HOTKEYS };
+let listeningHotkeyButton = null;
+
+function getChallengeActiveCandle() {
+  if (!challengeState.candles.length) return null;
+  const nextNoteIndex = challengeState.chartNotes.findIndex(note => note.time > challengeState.time);
+  const consumedNoteCount = nextNoteIndex < 0 ? challengeState.chartNotes.length : nextNoteIndex;
+  const activeIndex = Math.max(0, Math.min(challengeState.candles.length - 1, Math.floor(consumedNoteCount / challengeState.piece.candleSize)));
+  const candle = challengeState.candles[activeIndex];
+  const completed = challengeState.time >= candle.notes.at(-1).time;
+  return { activeIndex, active: partialCandle(candle, challengeState.time), completed };
+}
+
+function getChallengeCurrentPrice() {
+  const info = getChallengeActiveCandle();
+  return info ? info.active.close : null;
+}
+
+function computePnl(side, entryPrice, exitPrice, qty) {
+  return (side === 'long' ? exitPrice - entryPrice : entryPrice - exitPrice) * qty;
+}
+
+function closePosition(position, exitPrice, reason) {
+  position.status = 'closed';
+  position.exitPrice = exitPrice;
+  position.exitTime = challengeState.time;
+  position.exitReason = reason;
+  position.realizedPnl = computePnl(position.side, position.entryPrice, exitPrice, position.qty);
+}
+
+function fillOrder(order, price) {
+  const incomingSide = order.side === 'buy' ? 'long' : 'short';
+  if (tradingState.mode === 'hedging') {
+    tradingState.positions.push({ id: tradingState.nextId++, side: incomingSide, qty: order.qty, entryPrice: price, entryTime: challengeState.time, tp: order.tp, sl: order.sl, status: 'open', exitPrice: null, exitTime: null, exitReason: null, realizedPnl: null });
+    return;
+  }
+  const net = tradingState.positions.find(position => position.status === 'open' && position.netKey === 'net');
+  if (!net) {
+    tradingState.positions.push({ id: tradingState.nextId++, side: incomingSide, qty: order.qty, entryPrice: price, entryTime: challengeState.time, tp: order.tp, sl: order.sl, status: 'open', exitPrice: null, exitTime: null, exitReason: null, realizedPnl: null, netKey: 'net' });
+    return;
+  }
+  if (net.side === incomingSide) {
+    const totalQty = net.qty + order.qty;
+    net.entryPrice = (net.entryPrice * net.qty + price * order.qty) / totalQty;
+    net.qty = totalQty;
+    if (order.tp !== null) net.tp = order.tp;
+    if (order.sl !== null) net.sl = order.sl;
+    return;
+  }
+  if (order.qty === net.qty) {
+    closePosition(net, price, 'flatten');
+  } else if (order.qty < net.qty) {
+    const pnl = computePnl(net.side, net.entryPrice, price, order.qty);
+    net.qty -= order.qty;
+    tradingState.positions.push({ id: tradingState.nextId++, side: net.side, qty: order.qty, entryPrice: net.entryPrice, entryTime: net.entryTime, tp: null, sl: null, status: 'closed', exitPrice: price, exitTime: challengeState.time, exitReason: 'reduce', realizedPnl: pnl });
+  } else {
+    const pnl = computePnl(net.side, net.entryPrice, price, net.qty);
+    net.status = 'closed'; net.exitPrice = price; net.exitTime = challengeState.time; net.exitReason = 'flip'; net.realizedPnl = pnl;
+    tradingState.positions.push({ id: tradingState.nextId++, side: incomingSide, qty: order.qty - net.qty, entryPrice: price, entryTime: challengeState.time, tp: order.tp, sl: order.sl, status: 'open', exitPrice: null, exitTime: null, exitReason: null, realizedPnl: null, netKey: 'net' });
+  }
+}
+
+function processChallengeTick() {
+  const currentPrice = getChallengeCurrentPrice();
+  if (currentPrice === null) return;
+  if (tradingState.pendingOrders.length) {
+    tradingState.pendingOrders.splice(0).forEach(order => fillOrder(order, currentPrice));
+  }
+  if (tradingState.workingOrders.length) {
+    const volatility = Number($('challengeVolatilityValue')?.textContent) || 0;
+    const slippage = 0.1 * volatility;
+    const remaining = [];
+    tradingState.workingOrders.forEach(order => {
+      let triggered = false;
+      let fillPrice = order.price;
+      if (order.type === 'limit') {
+        if (order.side === 'buy' && currentPrice <= order.price) triggered = true;
+        if (order.side === 'sell' && currentPrice >= order.price) triggered = true;
+      } else {
+        if (order.side === 'buy' && currentPrice >= order.price) { triggered = true; fillPrice = order.price + slippage; }
+        if (order.side === 'sell' && currentPrice <= order.price) { triggered = true; fillPrice = order.price - slippage; }
+      }
+      if (triggered) fillOrder(order, fillPrice);
+      else remaining.push(order);
+    });
+    tradingState.workingOrders = remaining;
+  }
+  tradingState.positions.filter(position => position.status === 'open').forEach(position => {
+    if (position.tp !== null) {
+      const tpLevel = position.side === 'long' ? position.entryPrice + position.tp : position.entryPrice - position.tp;
+      if ((position.side === 'long' && currentPrice >= tpLevel) || (position.side === 'short' && currentPrice <= tpLevel)) { closePosition(position, tpLevel, 'tp'); return; }
+    }
+    if (position.sl !== null) {
+      const slLevel = position.side === 'long' ? position.entryPrice - position.sl : position.entryPrice + position.sl;
+      if ((position.side === 'long' && currentPrice <= slLevel) || (position.side === 'short' && currentPrice >= slLevel)) closePosition(position, slLevel, 'sl');
+    }
+  });
+  renderTradeLog();
+}
+
+function flashChallengeStatus(message) {
+  const label = $('challengeStatusLabel');
+  if (!label) return;
+  label.textContent = message;
+  clearTimeout(challengeState.statusFlashTimer);
+  challengeState.statusFlashTimer = setTimeout(() => { if (challengeState.playing) label.textContent = 'PLAYING'; }, 1200);
+}
+
+function placeHotkeyOrder(type, side, price) {
+  const currentPrice = getChallengeCurrentPrice();
+  if (currentPrice === null) return;
+  const qty = Math.max(1, Math.round(Number($('positionQuantity')?.value) || 1));
+  const tpRaw = $('takeProfitInput')?.value;
+  const slRaw = $('stopLossInput')?.value;
+  const tp = tpRaw !== '' && tpRaw != null ? Math.abs(Number(tpRaw)) : null;
+  const sl = slRaw !== '' && slRaw != null ? Math.abs(Number(slRaw)) : null;
+  if (type === 'market') {
+    tradingState.pendingOrders.push({ side, qty, tp, sl });
+    flashChallengeStatus(`MARKET ${side.toUpperCase()} QUEUED`);
+    return;
+  }
+  if (type === 'limit') {
+    const invalid = side === 'buy' ? price > currentPrice : price < currentPrice;
+    if (invalid) { flashChallengeStatus('INVALID LIMIT PRICE'); return; }
+  } else {
+    const invalid = side === 'buy' ? price < currentPrice : price > currentPrice;
+    if (invalid) { flashChallengeStatus('INVALID STOP PRICE'); return; }
+  }
+  tradingState.workingOrders.push({ id: tradingState.nextId++, type, side, qty, price, tp, sl });
+  renderTradeLog();
+  flashChallengeStatus(`${type.toUpperCase()} ${side.toUpperCase()} @ ${price.toFixed(2)}`);
+}
+
+function comboFromEvent(event) {
+  if (['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight'].includes(event.code)) return null;
+  const parts = [];
+  if (event.ctrlKey) parts.push('ctrl');
+  if (event.altKey) parts.push('alt');
+  if (event.shiftKey) parts.push('shift');
+  if (event.metaKey) parts.push('meta');
+  const keyName = event.code.startsWith('Key') ? event.code.slice(3).toLowerCase() : event.code.toLowerCase();
+  parts.push(keyName);
+  return parts.join('+');
+}
+
+function formatHotkey(combo) {
+  return combo.split('+').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('+');
+}
+
+function handleTradingHotkey(event) {
+  if (event.target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName)) return;
+  if (!challengeState.playing || challengeState.hoverPrice === null) return;
+  const combo = comboFromEvent(event);
+  if (!combo) return;
+  const action = Object.keys(hotkeys).find(key => hotkeys[key] === combo);
+  if (!action) return;
+  const actionMap = { limitBuy: ['limit', 'buy'], limitSell: ['limit', 'sell'], stopBuy: ['stop', 'buy'], stopSell: ['stop', 'sell'], marketBuy: ['market', 'buy'], marketSell: ['market', 'sell'] };
+  const [type, side] = actionMap[action];
+  event.preventDefault();
+  placeHotkeyOrder(type, side, challengeState.hoverPrice);
+}
+
+function submitOrder(side) {
+  if (!challengeState.playing) return;
+  const qty = Math.max(1, Math.round(Number($('positionQuantity')?.value) || 1));
+  const tpRaw = $('takeProfitInput')?.value;
+  const slRaw = $('stopLossInput')?.value;
+  tradingState.pendingOrders.push({ side, qty, tp: tpRaw !== '' && tpRaw != null ? Math.abs(Number(tpRaw)) : null, sl: slRaw !== '' && slRaw != null ? Math.abs(Number(slRaw)) : null });
+}
+
+function cancelWorkingOrder(id) {
+  tradingState.workingOrders = tradingState.workingOrders.filter(order => order.id !== id);
+  renderTradeLog();
+}
+
+function flattenPosition(id) {
+  const position = tradingState.positions.find(item => item.id === id && item.status === 'open');
+  if (!position) return;
+  const price = getChallengeCurrentPrice();
+  if (price === null) return;
+  closePosition(position, price, 'flatten');
+  renderTradeLog();
+}
+
+function renderTradeLog() {
+  const tbody = $('tradeLogBody');
+  if (!tbody) return;
+  const currentPrice = getChallengeCurrentPrice();
+  const workingRows = tradingState.workingOrders.map(order => {
+    return `<tr><td>${order.id}</td><td class="${order.side === 'buy' ? 'long' : 'short'}">${order.type.toUpperCase()} ${order.side.toUpperCase()}</td><td>${order.qty}</td><td>${order.price.toFixed(2)}</td><td>${order.tp != null ? order.tp.toFixed(2) : '\u2014'}</td><td>${order.sl != null ? order.sl.toFixed(2) : '\u2014'}</td><td>\u2014</td><td>\u2014</td><td>PENDING</td><td><button type="button" class="flatten-button" data-cancel-id="${order.id}">Cancel</button></td></tr>`;
+  }).join('');
+  const positionRows = tradingState.positions.map(position => {
+    const pnl = position.status === 'open' ? computePnl(position.side, position.entryPrice, currentPrice ?? position.entryPrice, position.qty) : position.realizedPnl;
+    const flattenCell = position.status === 'open' ? `<button type="button" class="flatten-button" data-flatten-id="${position.id}">Flatten</button>` : '';
+    return `<tr><td>${position.id}</td><td class="${position.side}">${position.side === 'long' ? 'BUY' : 'SELL'}</td><td>${position.qty}</td><td>${position.entryPrice.toFixed(2)}</td><td>${position.tp != null ? position.tp.toFixed(2) : '\u2014'}</td><td>${position.sl != null ? position.sl.toFixed(2) : '\u2014'}</td><td>${position.exitPrice != null ? position.exitPrice.toFixed(2) : '\u2014'}</td><td class="${pnl >= 0 ? 'positive' : 'negative'}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</td><td>${position.status === 'open' ? 'OPEN' : position.exitReason.toUpperCase()}</td><td>${flattenCell}</td></tr>`;
+  }).join('');
+  tbody.innerHTML = workingRows + positionRows;
+}
+
+function drawChallengeBracketLine(theme, y, plotLeft, plotRight, position, field, level) {
+  const bullishColor = theme.getPropertyValue('--bullish').trim();
+  const bearishColor = theme.getPropertyValue('--bearish').trim();
+  const paper = theme.getPropertyValue('--paper').trim();
+  const color = field === 'tp' ? bullishColor : bearishColor;
+  const py = y(level);
+  challengeCtx.save();
+  challengeCtx.setLineDash([1, 4]);
+  challengeCtx.strokeStyle = color;
+  challengeCtx.globalAlpha = 0.55;
+  challengeCtx.lineWidth = 1;
+  challengeCtx.beginPath();
+  challengeCtx.moveTo(plotLeft, py);
+  challengeCtx.lineTo(plotRight, py);
+  challengeCtx.stroke();
+  challengeCtx.setLineDash([]);
+  challengeCtx.globalAlpha = 1;
+  challengeCtx.restore();
+  const label = `${field.toUpperCase()} ${level.toFixed(2)}`;
+  challengeCtx.font = '10px DM Mono, monospace';
+  const labelWidth = challengeCtx.measureText(label).width + 10;
+  challengeCtx.save();
+  challengeCtx.globalAlpha = 0.85;
+  challengeCtx.fillStyle = color;
+  challengeCtx.fillRect(plotLeft, py - 9, labelWidth, 18);
+  challengeCtx.globalAlpha = 1;
+  challengeCtx.fillStyle = paper;
+  challengeCtx.textAlign = 'left';
+  challengeCtx.fillText(label, plotLeft + 5, py + 4);
+  challengeCtx.restore();
+  challengeState.bracketHitboxes.push({ positionId: position.id, field, lineTop: py - 6, lineBottom: py + 6 });
+}
+
+function drawChallengePositionLabels(theme, y, plotLeft, plotRight, currentPrice) {
+  const bullishColor = theme.getPropertyValue('--bullish').trim();
+  const bearishColor = theme.getPropertyValue('--bearish').trim();
+  const paper = theme.getPropertyValue('--paper').trim();
+  challengeState.bracketHitboxes = [];
+  tradingState.positions.filter(position => position.status === 'open').forEach(position => {
+    const color = position.side === 'long' ? bullishColor : bearishColor;
+    const py = y(position.entryPrice);
+    challengeCtx.save();
+    challengeCtx.setLineDash([4, 4]);
+    challengeCtx.strokeStyle = color;
+    challengeCtx.lineWidth = 1;
+    challengeCtx.beginPath();
+    challengeCtx.moveTo(plotLeft, py);
+    challengeCtx.lineTo(plotRight, py);
+    challengeCtx.stroke();
+    challengeCtx.setLineDash([]);
+    const pnl = computePnl(position.side, position.entryPrice, currentPrice, position.qty);
+    const label = `${position.side === 'long' ? 'L' : 'S'}${position.qty} ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}`;
+    challengeCtx.font = '10px DM Mono, monospace';
+    const labelWidth = challengeCtx.measureText(label).width + 10;
+    challengeCtx.fillStyle = color;
+    challengeCtx.fillRect(plotRight - labelWidth, py - 9, labelWidth, 18);
+    challengeCtx.fillStyle = paper;
+    challengeCtx.textAlign = 'left';
+    challengeCtx.fillText(label, plotRight - labelWidth + 5, py + 4);
+    challengeCtx.restore();
+    if (position.tp != null) {
+      const tpLevel = position.side === 'long' ? position.entryPrice + position.tp : position.entryPrice - position.tp;
+      drawChallengeBracketLine(theme, y, plotLeft, plotRight, position, 'tp', tpLevel);
+    }
+    if (position.sl != null) {
+      const slLevel = position.side === 'long' ? position.entryPrice - position.sl : position.entryPrice + position.sl;
+      drawChallengeBracketLine(theme, y, plotLeft, plotRight, position, 'sl', slLevel);
+    }
+  });
+}
+
+function drawChallengePendingOrders(theme, y, plotLeft, plotRight) {
+  const bullishColor = theme.getPropertyValue('--bullish').trim();
+  const bearishColor = theme.getPropertyValue('--bearish').trim();
+  const paper = theme.getPropertyValue('--paper').trim();
+  challengeState.pendingHitboxes = [];
+  tradingState.workingOrders.forEach(order => {
+    const color = order.side === 'buy' ? bullishColor : bearishColor;
+    const py = y(order.price);
+    challengeCtx.save();
+    challengeCtx.setLineDash([2, 3]);
+    challengeCtx.strokeStyle = color;
+    challengeCtx.globalAlpha = 0.6;
+    challengeCtx.lineWidth = 1;
+    challengeCtx.beginPath();
+    challengeCtx.moveTo(plotLeft, py);
+    challengeCtx.lineTo(plotRight, py);
+    challengeCtx.stroke();
+    challengeCtx.setLineDash([]);
+    challengeCtx.globalAlpha = 1;
+    challengeCtx.restore();
+    const label = `${order.type.toUpperCase()[0]} ${order.side === 'buy' ? 'B' : 'S'}${order.qty} @ ${order.price.toFixed(2)}`;
+    challengeCtx.font = '10px DM Mono, monospace';
+    const closeWidth = 14;
+    const labelWidth = challengeCtx.measureText(label).width + 10 + closeWidth;
+    const labelX = plotRight - labelWidth;
+    challengeCtx.save();
+    challengeCtx.globalAlpha = 0.85;
+    challengeCtx.fillStyle = color;
+    challengeCtx.fillRect(labelX, py - 9, labelWidth, 18);
+    challengeCtx.globalAlpha = 1;
+    challengeCtx.fillStyle = paper;
+    challengeCtx.textAlign = 'left';
+    challengeCtx.fillText(label, labelX + 5, py + 4);
+    challengeCtx.textAlign = 'center';
+    challengeCtx.fillText('\u00d7', labelX + labelWidth - closeWidth / 2, py + 4);
+    challengeCtx.textAlign = 'left';
+    challengeCtx.restore();
+    challengeState.pendingHitboxes.push({
+      id: order.id,
+      lineTop: py - 6,
+      lineBottom: py + 6,
+      closeRect: { x: labelX + labelWidth - closeWidth, y: py - 9, w: closeWidth, h: 18 },
+    });
+  });
+}
+
+function setOrderButtonsEnabled(enabled) {
+  ['buyButton', 'sellButton'].forEach(id => { const el = $(id); if (el) el.disabled = !enabled; });
+}
+
+function setBracketControlsEnabled(enabled) {
+  ['positionQuantity', 'takeProfitInput', 'stopLossInput'].forEach(id => { const el = $(id); if (el) el.disabled = !enabled; });
+  document.querySelectorAll('.mode-option, .quantity-shortcuts button').forEach(button => { button.disabled = !enabled; });
+}
+
+function setTradingControlsEnabled(enabled) {
+  setOrderButtonsEnabled(enabled);
+  setBracketControlsEnabled(enabled);
+}
+
+function setChallengeTickerPickerEnabled(enabled) {
+  const select = $('challengePieceSelect');
+  const button = $('challengePiecePickerButton');
+  if (select) select.disabled = !enabled;
+  if (button) button.disabled = !enabled;
+}
+
+function resetTradingState() {
+  tradingState.mode = 'netting';
+  tradingState.positions = [];
+  tradingState.pendingOrders = [];
+  tradingState.workingOrders = [];
+  tradingState.nextId = 1;
+  const qtyInput = $('positionQuantity'); if (qtyInput) qtyInput.value = 1;
+  const tpInput = $('takeProfitInput'); if (tpInput) tpInput.value = '';
+  const slInput = $('stopLossInput'); if (slInput) slInput.value = '';
+  document.querySelectorAll('.mode-option').forEach(button => button.classList.toggle('active', button.dataset.mode === 'netting'));
+  renderTradeLog();
+}
+
+function updateChallengeButtonLabel() {
+  const button = $('challengeButton');
+  if (!button) return;
+  const challengeScreen = $('challengeScreen');
+  const inChallenge = challengeScreen && !challengeScreen.hidden;
+  if (!inChallenge) { button.textContent = 'begin trading challenge'; button.disabled = false; return; }
+  if (!challengeState.piece || !challengeState.candles.length) { button.textContent = 'select a ticker to begin'; button.disabled = true; return; }
+  if (challengeState.finished) { button.textContent = 'challenge finished'; button.disabled = true; return; }
+  if (challengeState.started) { button.textContent = 'playing\u2026'; button.disabled = true; return; }
+  button.textContent = 'play'; button.disabled = false;
+}
+
+function finishChallengePlayback() {
+  challengeState.playing = false;
+  challengeState.finished = true;
+  const finalPrice = getChallengeCurrentPrice();
+  if (finalPrice !== null) tradingState.positions.filter(position => position.status === 'open').forEach(position => closePosition(position, finalPrice, 'session-end'));
+  renderTradeLog();
+  setTradingControlsEnabled(false);
+  updateChallengeButtonLabel();
+  if ($('challengeStatusLabel')) $('challengeStatusLabel').textContent = 'FINISHED';
+  drawChallengeChart();
+}
+
+function challengeAnimate(timestamp) {
+  if (!challengeState.playing) return;
+  if (challengeState.audio) {
+    challengeState.time = Math.min(challengeState.duration, challengeState.audioOrigin + Math.max(0, challengeState.audio.currentTime - challengeState.audioStart) * challengeState.speed);
+  }
+  scheduleAudioNotes(challengeState);
+  processChallengeTick();
+  drawChallengeChart();
+  if (challengeState.playing && challengeState.time < challengeState.duration) challengeState.raf = requestAnimationFrame(challengeAnimate);
+  else finishChallengePlayback();
+}
+
+function startChallengePlayback() {
+  if (!challengeState.piece || !challengeState.candles.length || challengeState.started) return;
+  challengeState.started = true;
+  challengeState.playing = true;
+  challengeState.finished = false;
+  challengeState.time = 0;
+  if (!challengeState.audio) setupAudio(challengeState);
+  challengeState.audio.resume().then(() => {
+    challengeState.audioOrigin = challengeState.time;
+    challengeState.audioStart = challengeState.audio.currentTime + 0.04;
+    challengeState.audioNoteIndex = challengeState.notes.findIndex(note => note.time >= challengeState.time);
+    if (challengeState.audioNoteIndex < 0) challengeState.audioNoteIndex = challengeState.notes.length;
+    scheduleAudioNotes(challengeState);
+  });
+  setOrderButtonsEnabled(true);
+  setChallengeTickerPickerEnabled(false);
+  updateChallengeButtonLabel();
+  if ($('challengeStatusLabel')) $('challengeStatusLabel').textContent = 'PLAYING';
+  cancelAnimationFrame(challengeState.raf);
+  challengeState.raf = requestAnimationFrame(challengeAnimate);
+}
+
+function closeChallengeAudio() {
+  if (challengeState.audio) challengeState.audio.close();
+  challengeState.audio = null;
+  challengeState.audioBus = null;
+  challengeState.reverbBus = null;
+}
+
+function resetChallengeChartState() {
+  cancelAnimationFrame(challengeState.raf);
+  closeChallengeAudio();
+  challengeState.pieceKey = '';
+  challengeState.piece = null;
+  challengeState.notes = [];
+  challengeState.chartNotes = [];
+  challengeState.candles = [];
+  challengeState.duration = 0;
+  challengeState.time = 0;
+  challengeState.playing = false;
+  challengeState.started = false;
+  challengeState.finished = false;
+  challengeState.lastFrame = null;
+  challengeState.xStart = 0;
+  challengeState.xCount = 8;
+  challengeState.yZoom = 1;
+  challengeState.yCenter = null;
+  challengeState.hoverCandle = null;
+  challengeState.hoverPrice = null;
+  challengeState.dragOrder = null;
+  challengeState.dragBracket = null;
+  challengeState.pendingHitboxes = [];
+  challengeState.bracketHitboxes = [];
+  resetTradingState();
+  setTradingControlsEnabled(false);
+  setChallengeTickerPickerEnabled(true);
+  const pieceSelect = $('challengePieceSelect');
+  if (pieceSelect) { pieceSelect.value = ''; syncChallengePieceSelector(); }
+  if ($('challengePieceTitleLabel')) $('challengePieceTitleLabel').textContent = '';
+  if ($('challengeStatusLabel')) $('challengeStatusLabel').textContent = 'SELECT';
+  updateChallengeButtonLabel();
+  drawChallengeChart();
+}
 
 function resizeChallengeCanvas() {
   if (!challengeCanvas) return;
@@ -544,7 +995,7 @@ function drawChallengeChart() {
   if (!challengeCanvas) return;
   const width = challengeCanvas.clientWidth, height = challengeCanvas.clientHeight;
   challengeCtx.clearRect(0, 0, width, height);
-  if (!challengeState.candles.length) return;
+  if (!challengeState.candles.length) { challengeState.pendingHitboxes = []; challengeState.bracketHitboxes = []; return; }
   const visibleValues = challengeState.candles.slice(Math.floor(challengeState.xStart), Math.ceil(challengeState.xStart + challengeState.xCount)).flatMap(candle => [candle.low, candle.high]);
   const values = visibleValues.length ? visibleValues : challengeState.candles.flatMap(candle => [candle.low, candle.high]);
   const dataMin = Math.min(...values), dataMax = Math.max(...values), dataRange = Math.max(2, (dataMax - dataMin) * 1.1);
@@ -567,19 +1018,54 @@ function drawChallengeChart() {
   const bearishColor = theme.getPropertyValue('--bearish').trim();
   const plotLeft = 38, plotRight = width - 10, plotTop = 0, plotBottom = height - 28;
   const candleGlow = document.body.classList.contains('night');
+  const activeInfo = getChallengeActiveCandle();
+  const activeIndex = activeInfo.activeIndex;
+  const completed = activeInfo.completed;
+  const active = activeInfo.active;
   challengeCtx.save();
   challengeCtx.beginPath();
   challengeCtx.rect(plotLeft, plotTop, plotRight - plotLeft, plotBottom - plotTop);
   challengeCtx.clip();
   challengeState.candles.forEach((candle, index) => {
     if (index < challengeState.xStart - 1 || index > challengeState.xStart + challengeState.xCount + 1) return;
+    if (index > activeIndex || (index === activeIndex && !completed)) return;
     const color = candle.close >= candle.open ? bullishColor : bearishColor;
     drawCandle(challengeCtx, candle, index, color, x, y, Math.min(18, Math.max(1, slot * 0.62)), candleGlow);
   });
+  if (!completed) drawCandle(challengeCtx, active, activeIndex, active.close >= active.open ? bullishColor : bearishColor, x, y, Math.min(18, Math.max(1, slot * 0.62)), candleGlow);
   challengeCtx.restore();
-  const lastIndex = challengeState.candles.length - 1;
-  const selectedIndex = challengeState.hoverCandle !== null ? challengeState.hoverCandle : lastIndex;
-  const selectedCandle = challengeState.candles[selectedIndex];
+  {
+    const currentPrice = active.close;
+    const gold = theme.getPropertyValue('--gold').trim();
+    const white = '#f5f7ff';
+    const crosshairColor = document.body.classList.contains('night') ? white : gold;
+    const glowing = document.body.classList.contains('night');
+    challengeCtx.save();
+    if (glowing) { challengeCtx.shadowColor = crosshairColor; challengeCtx.shadowBlur = 9; }
+    challengeCtx.strokeStyle = crosshairColor;
+    challengeCtx.setLineDash([2, 5]);
+    const playX = x(activeIndex);
+    const priceY = y(currentPrice);
+    if (playX >= plotLeft && playX <= plotRight) { challengeCtx.beginPath(); challengeCtx.moveTo(playX, 0); challengeCtx.lineTo(playX, plotBottom); challengeCtx.stroke(); }
+    challengeCtx.beginPath(); challengeCtx.moveTo(plotLeft, priceY); challengeCtx.lineTo(plotRight, priceY); challengeCtx.stroke();
+    challengeCtx.setLineDash([]);
+    challengeCtx.restore();
+    const priceLabel = currentPrice.toFixed(2);
+    const priceLabelWidth = Math.max(38, challengeCtx.measureText(priceLabel).width + 10);
+    const labelY = Math.max(9, Math.min(height - 9, priceY));
+    challengeCtx.save();
+    if (glowing) { challengeCtx.shadowColor = crosshairColor; challengeCtx.shadowBlur = 9; }
+    challengeCtx.fillStyle = crosshairColor;
+    challengeCtx.fillRect(0, labelY - 9, priceLabelWidth, 18);
+    challengeCtx.fillStyle = theme.getPropertyValue('--paper').trim();
+    challengeCtx.textAlign = 'left';
+    challengeCtx.fillText(priceLabel, 5, labelY + 4);
+    challengeCtx.restore();
+    drawChallengePositionLabels(theme, y, plotLeft, plotRight, currentPrice);
+    drawChallengePendingOrders(theme, y, plotLeft, plotRight);
+  }
+  const selectedIndex = challengeState.hoverCandle !== null && challengeState.hoverCandle <= activeIndex ? challengeState.hoverCandle : activeIndex;
+  const selectedCandle = selectedIndex === activeIndex && !completed ? active : challengeState.candles[selectedIndex];
   const selectedColor = selectedCandle.close >= selectedCandle.open ? bullishColor : bearishColor;
   updateChallengeReadout(selectedCandle, selectedColor);
   updateChallengeQuantitativeMetrics(selectedIndex);
@@ -591,24 +1077,38 @@ function drawChallengeChart() {
 
 async function loadChallengePiece(pieceKey) {
   const piece = PIECES[pieceKey];
+  cancelAnimationFrame(challengeState.raf);
+  closeChallengeAudio();
   challengeState.pieceKey = pieceKey;
   challengeState.piece = piece;
   challengeState.notes = [];
+  challengeState.chartNotes = [];
   challengeState.candles = [];
+  challengeState.duration = 0;
+  challengeState.time = 0;
+  challengeState.playing = false;
+  challengeState.started = false;
+  challengeState.finished = false;
+  challengeState.lastFrame = null;
   challengeState.xStart = 0;
   challengeState.xCount = 8;
   challengeState.yZoom = 1;
   challengeState.yCenter = null;
   challengeState.hoverCandle = null;
+  resetTradingState();
+  setTradingControlsEnabled(false);
   $('challengeStatusLabel').textContent = 'LOADING';
   try {
     const response = await fetch(piece.file);
     if (!response.ok) throw new Error(`Unable to load ${piece.file}`);
-    challengeState.notes = parseMidi(await response.arrayBuffer());
+    challengeState.notes = applyPieceSpecificAudio(parseMidi(await response.arrayBuffer()), piece);
+    challengeState.chartNotes = selectFormationNotes(challengeState.notes, seededRandom(challengeState.seed));
+    challengeState.duration = challengeState.notes.at(-1)?.time || 0;
     challengeState.candles = buildCandles(challengeState.notes, challengeState.seed, piece.candleSize);
     challengeState.xCount = Math.max(8, Math.min(120, challengeState.candles.length));
     $('challengeStatusLabel').textContent = 'READY';
     if ($('challengePieceTitleLabel')) $('challengePieceTitleLabel').textContent = piece.title;
+    setBracketControlsEnabled(true);
     resizeChallengeCanvas();
   } catch (error) {
     challengeState.candles = [];
@@ -616,6 +1116,7 @@ async function loadChallengePiece(pieceKey) {
     drawChallengeChart();
   }
   updateFooterNotes();
+  updateChallengeButtonLabel();
 }
 
 function syncChallengePieceSelector() {
@@ -641,6 +1142,16 @@ function chooseChallengePiece(pieceKey) {
   loadChallengePiece(pieceKey);
 }
 
+function getChallengePriceAtY(canvasHeight, localY) {
+  const visibleValues = challengeState.candles.slice(Math.floor(challengeState.xStart), Math.ceil(challengeState.xStart + challengeState.xCount)).flatMap(candle => [candle.low, candle.high]);
+  const values = visibleValues.length ? visibleValues : challengeState.candles.flatMap(candle => [candle.low, candle.high]);
+  const dataMin = Math.min(...values), dataMax = Math.max(...values), dataRange = Math.max(2, (dataMax - dataMin) * 1.1);
+  const center = challengeState.yCenter ?? (dataMin + dataMax) / 2;
+  const visibleRange = dataRange / challengeState.yZoom;
+  const min = center - visibleRange / 2;
+  return min + (canvasHeight - 28 - localY) * visibleRange / (canvasHeight - 52);
+}
+
 function updateChallengeHoveredCandle(event) {
   if (!challengeState.candles.length || challengeState.dragX || challengeState.dragY) return;
   const rect = challengeCanvas.getBoundingClientRect();
@@ -648,16 +1159,19 @@ function updateChallengeHoveredCandle(event) {
   const localY = event.clientY - rect.top;
   if (localX < 38 || localX > challengeCanvas.clientWidth - 10 || localY < 0 || localY > challengeCanvas.clientHeight - 28) {
     if (challengeState.hoverCandle !== null) { challengeState.hoverCandle = null; drawChallengeChart(); }
+    challengeState.hoverPrice = null;
     return;
   }
+  challengeState.hoverPrice = getChallengePriceAtY(challengeCanvas.clientHeight, localY);
   const index = Math.floor(challengeState.xStart + ((localX - 38) / (challengeCanvas.clientWidth - 58)) * challengeState.xCount);
+  const activeIndex = getChallengeActiveCandle().activeIndex;
   const visibleStart = Math.floor(challengeState.xStart);
   const visibleEnd = Math.min(challengeState.candles.length - 1, Math.ceil(challengeState.xStart + challengeState.xCount));
-  if (index < visibleStart || index > visibleEnd) {
+  if (index < visibleStart || index > visibleEnd || index > activeIndex) {
     if (challengeState.hoverCandle !== null) { challengeState.hoverCandle = null; drawChallengeChart(); }
     return;
   }
-  const hovered = Math.max(0, Math.min(challengeState.candles.length - 1, index));
+  const hovered = Math.max(0, Math.min(activeIndex, index));
   if (challengeState.hoverCandle !== hovered) { challengeState.hoverCandle = hovered; drawChallengeChart(); }
 }
 
@@ -728,6 +1242,61 @@ function endChallengeChartDrag(event) {
   challengeCanvas.releasePointerCapture(event.pointerId);
   challengeState.dragX = null;
   challengeCanvas.classList.remove('dragging-x');
+}
+
+function beginChallengeOrderDrag(event, id) {
+  event.preventDefault();
+  challengeCanvas.setPointerCapture(event.pointerId);
+  challengeState.dragOrder = { pointerId: event.pointerId, id };
+  challengeCanvas.classList.add('dragging-y');
+}
+
+function dragChallengeOrder(event) {
+  if (!challengeState.dragOrder || event.pointerId !== challengeState.dragOrder.pointerId) return;
+  const order = tradingState.workingOrders.find(item => item.id === challengeState.dragOrder.id);
+  if (!order) { challengeState.dragOrder = null; return; }
+  const rect = challengeCanvas.getBoundingClientRect();
+  const localY = event.clientY - rect.top;
+  order.price = getChallengePriceAtY(challengeCanvas.clientHeight, localY);
+  renderTradeLog();
+  drawChallengeChart();
+}
+
+function endChallengeOrderDrag(event) {
+  if (!challengeState.dragOrder || event.pointerId !== challengeState.dragOrder.pointerId) return;
+  challengeCanvas.releasePointerCapture(event.pointerId);
+  challengeState.dragOrder = null;
+  challengeCanvas.classList.remove('dragging-y');
+}
+
+function beginChallengeBracketDrag(event, positionId, field) {
+  event.preventDefault();
+  challengeCanvas.setPointerCapture(event.pointerId);
+  challengeState.dragBracket = { pointerId: event.pointerId, positionId, field };
+  challengeCanvas.classList.add('dragging-y');
+}
+
+function dragChallengeBracket(event) {
+  if (!challengeState.dragBracket || event.pointerId !== challengeState.dragBracket.pointerId) return;
+  const position = tradingState.positions.find(item => item.id === challengeState.dragBracket.positionId && item.status === 'open');
+  if (!position) { challengeState.dragBracket = null; return; }
+  const rect = challengeCanvas.getBoundingClientRect();
+  const localY = event.clientY - rect.top;
+  const level = getChallengePriceAtY(challengeCanvas.clientHeight, localY);
+  const field = challengeState.dragBracket.field;
+  const offset = field === 'tp'
+    ? (position.side === 'long' ? level - position.entryPrice : position.entryPrice - level)
+    : (position.side === 'long' ? position.entryPrice - level : level - position.entryPrice);
+  position[field] = Math.max(0, offset);
+  renderTradeLog();
+  drawChallengeChart();
+}
+
+function endChallengeBracketDrag(event) {
+  if (!challengeState.dragBracket || event.pointerId !== challengeState.dragBracket.pointerId) return;
+  challengeCanvas.releasePointerCapture(event.pointerId);
+  challengeState.dragBracket = null;
+  challengeCanvas.classList.remove('dragging-y');
 }
 
 async function loadPiece(pieceKey) {
@@ -972,41 +1541,107 @@ const challengeButton = $('challengeButton');
 const backToChartButton = $('backToChartButton');
 if (challengeButton && backToChartButton) {
   challengeButton.onclick = () => {
-    if (workbenchSection) workbenchSection.classList.add('frozen');
     const challengeScreen = $('challengeScreen');
-    challengeScreen.hidden = false;
-    updateFooterNotes();
-    resizeChallengeCanvas();
-    challengeScreen.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const inChallenge = challengeScreen && !challengeScreen.hidden;
+    if (!inChallenge) {
+      if (state.playing) pause();
+      if (workbenchSection) workbenchSection.classList.add('frozen');
+      challengeScreen.hidden = false;
+      updateFooterNotes();
+      resizeChallengeCanvas();
+      updateChallengeButtonLabel();
+      challengeScreen.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    if (!challengeState.piece || challengeState.started) return;
+    startChallengePlayback();
   };
   backToChartButton.onclick = () => {
     $('challengeScreen').hidden = true;
     if (workbenchSection) workbenchSection.classList.remove('frozen');
+    resetChallengeChartState();
     updateFooterNotes();
     resizeCanvas();
   };
 }
+$('buyButton').onclick = () => submitOrder('buy');
+$('sellButton').onclick = () => submitOrder('sell');
+document.querySelectorAll('.mode-option').forEach(button => {
+  button.onclick = () => {
+    tradingState.mode = button.dataset.mode;
+    document.querySelectorAll('.mode-option').forEach(other => other.classList.toggle('active', other === button));
+  };
+});
+document.querySelectorAll('.quantity-shortcuts button').forEach(button => {
+  button.onclick = () => { $('positionQuantity').value = button.dataset.qty; };
+});
+const tradeLogBody = $('tradeLogBody');
+if (tradeLogBody) {
+  tradeLogBody.addEventListener('pointerdown', event => {
+    const flattenButton = event.target.closest('[data-flatten-id]');
+    if (flattenButton) { flattenPosition(Number(flattenButton.dataset.flattenId)); return; }
+    const cancelButton = event.target.closest('[data-cancel-id]');
+    if (cancelButton) cancelWorkingOrder(Number(cancelButton.dataset.cancelId));
+  });
+}
+document.querySelectorAll('.hotkey-input').forEach(button => {
+  button.textContent = formatHotkey(hotkeys[button.dataset.hotkey]);
+  button.onclick = () => {
+    if (listeningHotkeyButton) { listeningHotkeyButton.classList.remove('listening'); listeningHotkeyButton.textContent = formatHotkey(hotkeys[listeningHotkeyButton.dataset.hotkey]); }
+    listeningHotkeyButton = button;
+    button.classList.add('listening');
+    button.textContent = 'press a key\u2026';
+  };
+});
+document.addEventListener('keydown', event => {
+  if (listeningHotkeyButton) {
+    const combo = comboFromEvent(event);
+    if (!combo) return;
+    event.preventDefault();
+    hotkeys[listeningHotkeyButton.dataset.hotkey] = combo;
+    listeningHotkeyButton.textContent = formatHotkey(combo);
+    listeningHotkeyButton.classList.remove('listening');
+    listeningHotkeyButton = null;
+    return;
+  }
+  handleTradingHotkey(event);
+});
 if (challengeCanvas) {
   challengeCanvas.addEventListener('wheel', zoomChallengeHorizontally, { passive: false });
   challengeCanvas.addEventListener('pointerdown', event => {
     const rect = challengeCanvas.getBoundingClientRect();
-    if (event.clientX - rect.left <= 38) beginChallengeYAxisDrag(event);
+    const localX = event.clientX - rect.left;
+    const localY = event.clientY - rect.top;
+    const closeHit = challengeState.pendingHitboxes.find(box => localX >= box.closeRect.x && localX <= box.closeRect.x + box.closeRect.w && localY >= box.closeRect.y && localY <= box.closeRect.y + box.closeRect.h);
+    if (closeHit) { cancelWorkingOrder(closeHit.id); return; }
+    const lineHit = challengeState.pendingHitboxes.find(box => localX > 38 && localY >= box.lineTop && localY <= box.lineBottom);
+    if (lineHit) { beginChallengeOrderDrag(event, lineHit.id); return; }
+    const bracketHit = challengeState.bracketHitboxes.find(box => localX > 38 && localY >= box.lineTop && localY <= box.lineBottom);
+    if (bracketHit) { beginChallengeBracketDrag(event, bracketHit.positionId, bracketHit.field); return; }
+    if (localX <= 38) beginChallengeYAxisDrag(event);
     else beginChallengeChartDrag(event);
   });
   challengeCanvas.addEventListener('pointermove', event => {
-    if (challengeState.dragY) dragChallengeYAxis(event);
+    if (challengeState.dragOrder) dragChallengeOrder(event);
+    else if (challengeState.dragBracket) dragChallengeBracket(event);
+    else if (challengeState.dragY) dragChallengeYAxis(event);
     else if (challengeState.dragX) dragChallengeChart(event);
     else updateChallengeHoveredCandle(event);
   });
   challengeCanvas.addEventListener('pointerup', event => {
+    endChallengeOrderDrag(event);
+    endChallengeBracketDrag(event);
     endChallengeYAxisDrag(event);
     endChallengeChartDrag(event);
   });
   challengeCanvas.addEventListener('pointercancel', event => {
+    endChallengeOrderDrag(event);
+    endChallengeBracketDrag(event);
     endChallengeYAxisDrag(event);
     endChallengeChartDrag(event);
   });
   challengeCanvas.addEventListener('pointerleave', () => {
+    challengeState.hoverPrice = null;
     if (challengeState.hoverCandle !== null) { challengeState.hoverCandle = null; drawChallengeChart(); }
   });
 }
