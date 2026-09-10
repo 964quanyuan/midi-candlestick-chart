@@ -1542,7 +1542,7 @@ function applySeed(seed) {
 
 $('seed').value = state.seed; $('attackValue').textContent = `${state.attack.toFixed(3)}s`; $('reverbValue').textContent = `${Math.round(state.reverb * 100)}%`; $('panSensitivityValue').textContent = `${state.panSensitivity.toFixed(2)}x`;
 updateDieFace(state.seed);
-$('playButton').onclick = play; $('pauseButton').onclick = pause; $('restartButton').onclick = restart; $('finishButton').onclick = finishPlayback; $('pieceSelect').onchange = event => { if (event.target.value) { syncPieceSelector(); } loadPiece(event.target.value); }; $('piecePickerButton').onclick = () => { const wrapper = $('piecePickerButton').closest('.piece-menu'); const isOpen = wrapper.classList.toggle('open'); $('piecePickerButton').setAttribute('aria-expanded', String(isOpen)); }; $('piecePickerMenu').onclick = event => { const option = event.target.closest('[data-piece]'); if (!option) return; choosePiece(option.dataset.piece); const wrapper = $('piecePickerButton').closest('.piece-menu'); wrapper.classList.remove('open'); $('piecePickerButton').setAttribute('aria-expanded', 'false'); }; document.addEventListener('click', event => { const wrapper = $('piecePickerButton').closest('.piece-menu'); if (!wrapper.contains(event.target)) { wrapper.classList.remove('open'); $('piecePickerButton').setAttribute('aria-expanded', 'false'); } }); $('timeline').oninput = event => { state.time = Number(event.target.value); if (state.audio) state.audio.close(); state.audio = null; draw(); }; $('speed').oninput = event => { state.speed = Number(event.target.value); $('speedValue').textContent = `${state.speed.toFixed(2)}x`; }; $('attack').oninput = event => { state.attack = Number(event.target.value); $('attackValue').textContent = `${state.attack.toFixed(3)}s`; }; $('reverb').oninput = event => { state.reverb = Number(event.target.value); $('reverbValue').textContent = `${Math.round(state.reverb * 100)}%`; if (state.reverbBus) state.reverbBus.gain.setTargetAtTime(state.reverb, state.audio.currentTime, 0.01); }; $('panSensitivity').oninput = event => { state.panSensitivity = Number(event.target.value); $('panSensitivityValue').textContent = `${state.panSensitivity.toFixed(2)}x`; }; $('seed').onchange = event => { const seed = Number.parseInt(event.target.value, 10); applySeed(Number.isNaN(seed) ? 1 : seed); };
+$('playButton').onclick = play; $('pauseButton').onclick = pause; $('restartButton').onclick = restart; $('finishButton').onclick = finishPlayback; $('pieceSelect').onchange = event => { if (event.target.value) { syncPieceSelector(); } loadPiece(event.target.value); }; $('piecePickerButton').onclick = () => { const wrapper = $('piecePickerButton').closest('.piece-menu'); const isOpen = wrapper.classList.toggle('open'); $('piecePickerButton').setAttribute('aria-expanded', String(isOpen)); }; $('piecePickerMenu').onclick = event => { const option = event.target.closest('[data-piece]'); if (!option) return; choosePiece(option.dataset.piece); const wrapper = $('piecePickerButton').closest('.piece-menu'); wrapper.classList.remove('open'); $('piecePickerButton').setAttribute('aria-expanded', 'false'); }; document.addEventListener('click', event => { const wrapper = $('piecePickerButton').closest('.piece-menu'); if (!wrapper.contains(event.target)) { wrapper.classList.remove('open'); $('piecePickerButton').setAttribute('aria-expanded', 'false'); } }); $('timeline').oninput = event => { state.time = Number(event.target.value); if (state.audio) { state.audio.close(); state.audio = null; } if (state.playing) { setupAudio(); state.audio.resume(); } draw(); }; $('speed').oninput = event => { if (state.playing) pause(); state.speed = Number(event.target.value); $('speedValue').textContent = `${state.speed.toFixed(2)}x`; }; $('attack').oninput = event => { state.attack = Number(event.target.value); $('attackValue').textContent = `${state.attack.toFixed(3)}s`; }; $('reverb').oninput = event => { state.reverb = Number(event.target.value); $('reverbValue').textContent = `${Math.round(state.reverb * 100)}%`; if (state.reverbBus) state.reverbBus.gain.setTargetAtTime(state.reverb, state.audio.currentTime, 0.01); }; $('panSensitivity').oninput = event => { state.panSensitivity = Number(event.target.value); $('panSensitivityValue').textContent = `${state.panSensitivity.toFixed(2)}x`; }; $('seed').onchange = event => { const seed = Number.parseInt(event.target.value, 10); applySeed(Number.isNaN(seed) ? 1 : seed); };
 $('seedDie').onclick = () => applySeed(Math.floor(Math.random() * 4294967295) + 1);
 const piecePickerButton = $('piecePickerButton');
 const piecePickerMenu = $('piecePickerMenu');
@@ -1609,6 +1609,48 @@ if (challengePiecePickerButton && challengePiecePickerMenu) {
 if ($('challengePieceSelect')) {
   $('challengePieceSelect').onchange = event => { if (event.target.value) syncChallengePieceSelector(); loadChallengePiece(event.target.value); };
 }
+let challengeScrollHandler = null;
+
+function smoothScrollTo(targetY, duration = 1100, onComplete) {
+  const startY = window.scrollY;
+  const distance = targetY - startY;
+  const startTime = performance.now();
+  const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  function step(now) {
+    const progress = Math.min(1, (now - startTime) / duration);
+    window.scrollTo(0, startY + distance * easeInOutCubic(progress));
+    if (progress < 1) requestAnimationFrame(step);
+    else if (onComplete) onComplete();
+  }
+  requestAnimationFrame(step);
+}
+
+function enableChallengeScrollGuard() {
+  if (challengeScrollHandler) return;
+  let ticking = false;
+  challengeScrollHandler = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      ticking = false;
+      const themeToggle = $('themeToggle');
+      const challengeScreen = $('challengeScreen');
+      if (!themeToggle || !challengeScreen || challengeScreen.hidden) return;
+      const minScrollY = Math.max(0, window.scrollY + themeToggle.getBoundingClientRect().top - 112);
+      if (window.scrollY < minScrollY) {
+        window.scrollTo({ top: window.scrollY + challengeScreen.getBoundingClientRect().top, behavior: 'smooth' });
+      }
+    });
+  };
+  window.addEventListener('scroll', challengeScrollHandler, { passive: true });
+}
+
+function disableChallengeScrollGuard() {
+  if (!challengeScrollHandler) return;
+  window.removeEventListener('scroll', challengeScrollHandler);
+  challengeScrollHandler = null;
+}
+
 const challengeButton = $('challengeButton');
 if (challengeButton) {
   challengeButton.onclick = () => {
@@ -1622,14 +1664,17 @@ if (challengeButton) {
       resizeChallengeCanvas();
       updateChallengeButtonLabel();
       challengeScreen.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      enableChallengeScrollGuard();
       return;
     }
     if (challengeState.started) {
-      challengeScreen.hidden = true;
       if (workbenchSection) workbenchSection.classList.remove('frozen');
+      disableChallengeScrollGuard();
       resetChallengeChartState();
       updateFooterNotes();
       resizeCanvas();
+      const targetY = workbenchSection ? workbenchSection.getBoundingClientRect().top + window.scrollY : window.scrollY;
+      smoothScrollTo(targetY, 1100, () => { challengeScreen.hidden = true; updateChallengeButtonLabel(); });
       return;
     }
     if (!challengeState.piece) return;
