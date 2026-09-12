@@ -15,4 +15,4 @@
 ### Conceptual Premise
 This project posits that modern classical music and financial markets share a deep structural identity. Both operate as pseudo-chaotic systems where clear signals emerge from a substrate of noise—complex amalgamations of systematic rules, human emotion, and systemic tension. 
 
-Both domains are defined by absolute uncertainty in the moment, yet reveal undeniable logic and sensibility in hindsight. **♭ar for ฿ar** visualizes this parallelism in real time by translating the sonic canvas of avant-garde composition to the visual and structural language of high-finance trading.
+Both domains are defined by absolute uncertainty in the moment, yet reveal undeniable logic and clarity in hindsight. **♭ar for ฿ar** visualizes this parallelism in real time by translating the sonic canvas of avant-garde composition to the visual and structural language of high-finance trading.
