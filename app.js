@@ -578,14 +578,41 @@ function updateChallengeAccountMetrics(currentPrice) {
   const unrealized = currentPrice === null ? 0 : computeTotalUnrealizedPnl(currentPrice);
   balanceValue.textContent = tradingState.balance.toFixed(2);
   unrealizedValue.textContent = `${unrealized >= 0 ? '+' : ''}${unrealized.toFixed(2)}`;
-  const theme = getComputedStyle(document.body);
-  unrealizedValue.style.color = theme.getPropertyValue(unrealized >= 0 ? '--bullish' : '--bearish').trim();
+  unrealizedValue.style.color = unrealized >= 0 ? 'var(--bullish)' : 'var(--bearish)';
 }
 
 function liquidateChallengeAccount(currentPrice) {
   tradingState.positions.filter(position => position.status === 'open').forEach(position => closePosition(position, currentPrice, 'liquidated'));
   tradingState.workingOrders = [];
+  cleanChallengeDragState();
   flashChallengeStatus('ACCOUNT LIQUIDATED');
+}
+
+function cleanChallengeDragState() {
+  if (challengeState.dragOrder) {
+    const exists = tradingState.workingOrders.some(item => item.id === challengeState.dragOrder.id);
+    if (!exists) {
+      if (challengeCanvas && challengeCanvas.releasePointerCapture && challengeState.dragOrder.pointerId != null) {
+        try { challengeCanvas.releasePointerCapture(challengeState.dragOrder.pointerId); } catch (_) {}
+      }
+      challengeState.dragOrder = null;
+    }
+  }
+  if (challengeState.dragBracket) {
+    const { ownerKind, ownerId } = challengeState.dragBracket;
+    const owner = ownerKind === 'position'
+      ? tradingState.positions.find(item => item.id === ownerId && item.status === 'open')
+      : tradingState.workingOrders.find(item => item.id === ownerId);
+    if (!owner) {
+      if (challengeCanvas && challengeCanvas.releasePointerCapture && challengeState.dragBracket.pointerId != null) {
+        try { challengeCanvas.releasePointerCapture(challengeState.dragBracket.pointerId); } catch (_) {}
+      }
+      challengeState.dragBracket = null;
+    }
+  }
+  if (!challengeState.dragY && !challengeState.dragBracket && !challengeState.dragOrder) {
+    challengeCanvas?.classList.remove('dragging-y');
+  }
 }
 
 function processChallengeTick() {
@@ -629,6 +656,7 @@ function processChallengeTick() {
   if (tradingState.balance + computeTotalUnrealizedPnl(currentPrice) <= 0 && tradingState.positions.some(position => position.status === 'open')) {
     liquidateChallengeAccount(currentPrice);
   }
+  cleanChallengeDragState();
   updateChallengeAccountMetrics(currentPrice);
   renderTradeLog();
 }
@@ -705,6 +733,7 @@ function submitOrder(side) {
 
 function cancelWorkingOrder(id) {
   tradingState.workingOrders = tradingState.workingOrders.filter(order => order.id !== id);
+  cleanChallengeDragState();
   renderTradeLog();
 }
 
@@ -714,6 +743,7 @@ function flattenPosition(id) {
   const price = getChallengeCurrentPrice();
   if (price === null) return;
   closePosition(position, price, 'flatten');
+  cleanChallengeDragState();
   renderTradeLog();
 }
 
@@ -923,6 +953,7 @@ function finishChallengePlayback() {
   if (finalPrice !== null) tradingState.positions.filter(position => position.status === 'open').forEach(position => closePosition(position, finalPrice, 'session-end'));
   tradingState.workingOrders = [];
   challengeState.pendingHitboxes = [];
+  cleanChallengeDragState();
   renderTradeLog();
   setTradingControlsEnabled(false);
   updateChallengeButtonLabel();
@@ -979,6 +1010,8 @@ function resetChallengeMetricsDisplay() {
   if ($('challengePitchDeltaAverageValue')) $('challengePitchDeltaAverageValue').textContent = '0.00';
   if ($('challengeRsiValue')) $('challengeRsiValue').textContent = '50.00';
   if ($('challengeMeasureLabel')) $('challengeMeasureLabel').textContent = 'MEASURE 01 / CANDLE 01';
+  const unrealized = $('challengeUnrealizedPnlValue');
+  if (unrealized) { unrealized.textContent = '0.00'; unrealized.style.color = 'var(--bullish)'; }
 }
 
 function resetChallengeChartState() {
@@ -1005,6 +1038,7 @@ function resetChallengeChartState() {
   challengeState.dragBracket = null;
   challengeState.pendingHitboxes = [];
   challengeState.bracketHitboxes = [];
+  cleanChallengeDragState();
   resetTradingState();
   setTradingControlsEnabled(false);
   setHotkeyControlsEnabled(false);
@@ -1136,6 +1170,7 @@ function drawChallengeChart() {
   const selectedColor = selectedCandle.close >= selectedCandle.open ? bullishColor : bearishColor;
   updateChallengeReadout(selectedCandle, selectedColor);
   updateChallengeQuantitativeMetrics(selectedIndex);
+  updateChallengeAccountMetrics(active.close);
   const { measure, candleInMeasure } = getMeasureAndCandle(selectedIndex, challengeState.piece);
   $('challengeMeasureLabel').textContent = measure === null
     ? `MEASURE ? / CANDLE ${String(candleInMeasure).padStart(2, '0')}`
@@ -1277,10 +1312,13 @@ function dragChallengeYAxis(event) {
 }
 
 function endChallengeYAxisDrag(event) {
-  if (!challengeState.dragY || event.pointerId !== challengeState.dragY.pointerId) return;
-  challengeCanvas.releasePointerCapture(event.pointerId);
-  challengeState.dragY = null;
-  challengeCanvas.classList.remove('dragging-y');
+  if (challengeState.dragY && event.pointerId === challengeState.dragY.pointerId) {
+    if (challengeCanvas && challengeCanvas.releasePointerCapture) {
+      try { challengeCanvas.releasePointerCapture(event.pointerId); } catch (_) {}
+    }
+    challengeState.dragY = null;
+  }
+  cleanChallengeDragState();
 }
 
 function beginChallengeChartDrag(event) {
@@ -1307,10 +1345,13 @@ function dragChallengeChart(event) {
 }
 
 function endChallengeChartDrag(event) {
-  if (!challengeState.dragX || event.pointerId !== challengeState.dragX.pointerId) return;
-  challengeCanvas.releasePointerCapture(event.pointerId);
-  challengeState.dragX = null;
-  challengeCanvas.classList.remove('dragging-x');
+  if (challengeState.dragX && event.pointerId === challengeState.dragX.pointerId) {
+    if (challengeCanvas && challengeCanvas.releasePointerCapture) {
+      try { challengeCanvas.releasePointerCapture(event.pointerId); } catch (_) {}
+    }
+    challengeState.dragX = null;
+  }
+  challengeCanvas?.classList.remove('dragging-x');
 }
 
 function beginChallengeOrderDrag(event, id) {
@@ -1323,7 +1364,7 @@ function beginChallengeOrderDrag(event, id) {
 function dragChallengeOrder(event) {
   if (!challengeState.dragOrder || event.pointerId !== challengeState.dragOrder.pointerId) return;
   const order = tradingState.workingOrders.find(item => item.id === challengeState.dragOrder.id);
-  if (!order) { challengeState.dragOrder = null; return; }
+  if (!order) { cleanChallengeDragState(); return; }
   const rect = challengeCanvas.getBoundingClientRect();
   const localY = event.clientY - rect.top;
   order.price = getChallengePriceAtY(challengeCanvas.clientHeight, localY);
@@ -1332,10 +1373,13 @@ function dragChallengeOrder(event) {
 }
 
 function endChallengeOrderDrag(event) {
-  if (!challengeState.dragOrder || event.pointerId !== challengeState.dragOrder.pointerId) return;
-  challengeCanvas.releasePointerCapture(event.pointerId);
-  challengeState.dragOrder = null;
-  challengeCanvas.classList.remove('dragging-y');
+  if (challengeState.dragOrder && event.pointerId === challengeState.dragOrder.pointerId) {
+    if (challengeCanvas && challengeCanvas.releasePointerCapture) {
+      try { challengeCanvas.releasePointerCapture(event.pointerId); } catch (_) {}
+    }
+    challengeState.dragOrder = null;
+  }
+  cleanChallengeDragState();
 }
 
 function beginChallengeBracketDrag(event, ownerKind, ownerId, field) {
@@ -1351,7 +1395,7 @@ function dragChallengeBracket(event) {
   const owner = ownerKind === 'position'
     ? tradingState.positions.find(item => item.id === ownerId && item.status === 'open')
     : tradingState.workingOrders.find(item => item.id === ownerId);
-  if (!owner) { challengeState.dragBracket = null; return; }
+  if (!owner) { cleanChallengeDragState(); return; }
   const currentPrice = getChallengeCurrentPrice();
   if (currentPrice === null) return;
   const rect = challengeCanvas.getBoundingClientRect();
@@ -1372,10 +1416,13 @@ function dragChallengeBracket(event) {
 }
 
 function endChallengeBracketDrag(event) {
-  if (!challengeState.dragBracket || event.pointerId !== challengeState.dragBracket.pointerId) return;
-  challengeCanvas.releasePointerCapture(event.pointerId);
-  challengeState.dragBracket = null;
-  challengeCanvas.classList.remove('dragging-y');
+  if (challengeState.dragBracket && event.pointerId === challengeState.dragBracket.pointerId) {
+    if (challengeCanvas && challengeCanvas.releasePointerCapture) {
+      try { challengeCanvas.releasePointerCapture(event.pointerId); } catch (_) {}
+    }
+    challengeState.dragBracket = null;
+  }
+  cleanChallengeDragState();
 }
 
 async function loadPiece(pieceKey) {
@@ -1757,15 +1804,18 @@ if (challengeCanvas) {
     endChallengeBracketDrag(event);
     endChallengeYAxisDrag(event);
     endChallengeChartDrag(event);
+    cleanChallengeDragState();
   });
   challengeCanvas.addEventListener('pointercancel', event => {
     endChallengeOrderDrag(event);
     endChallengeBracketDrag(event);
     endChallengeYAxisDrag(event);
     endChallengeChartDrag(event);
+    cleanChallengeDragState();
   });
   challengeCanvas.addEventListener('pointerleave', () => {
     challengeState.hoverPrice = null;
+    cleanChallengeDragState();
     if (challengeState.hoverCandle !== null) { challengeState.hoverCandle = null; drawChallengeChart(); }
   });
 }
@@ -1794,6 +1844,8 @@ canvas.addEventListener('pointerleave', () => {
 window.onresize = () => { resizeCanvas(); const challengeScreen = $('challengeScreen'); if (challengeScreen && !challengeScreen.hidden) resizeChallengeCanvas(); };
 window.onkeydown = event => {
   if (event.target.tagName === 'INPUT') return;
+  const challengeScreen = $('challengeScreen');
+  if (challengeScreen && !challengeScreen.hidden) return;
   if (event.code === 'Space') { event.preventDefault(); state.playing ? pause() : play(); }
   if (event.key.toLowerCase() === 'r') restart();
   if (event.key === 'ArrowRight') { state.time = state.duration; draw(); }
