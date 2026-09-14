@@ -921,16 +921,11 @@ function setChallengeTickerPickerEnabled(enabled) {
 }
 
 function resetTradingState() {
-  tradingState.mode = 'netting';
   tradingState.positions = [];
   tradingState.pendingOrders = [];
   tradingState.workingOrders = [];
   tradingState.nextId = 1;
   tradingState.balance = 1000;
-  const qtyInput = $('positionQuantity'); if (qtyInput) qtyInput.value = 1;
-  const tpInput = $('takeProfitInput'); if (tpInput) tpInput.value = '';
-  const slInput = $('stopLossInput'); if (slInput) slInput.value = '';
-  document.querySelectorAll('.mode-option').forEach(button => button.classList.toggle('active', button.dataset.mode === 'netting'));
   updateChallengeAccountMetrics(getChallengeCurrentPrice() ?? 0);
   renderTradeLog();
 }
@@ -1397,16 +1392,15 @@ function dragChallengeBracket(event) {
     : tradingState.workingOrders.find(item => item.id === ownerId);
   if (!owner) { cleanChallengeDragState(); return; }
   const currentPrice = getChallengeCurrentPrice();
-  if (currentPrice === null) return;
+  if (ownerKind === 'position' && currentPrice === null) return;
   const rect = challengeCanvas.getBoundingClientRect();
   const localY = event.clientY - rect.top;
   let level = getChallengePriceAtY(challengeCanvas.clientHeight, localY);
   const referencePrice = ownerKind === 'position' ? owner.entryPrice : owner.price;
   const isLong = owner.side === 'long' || owner.side === 'buy';
-  // TP behaves like a closing limit order, SL like a closing stop order: both are only
-  // constrained by the current price, so either can legally sit on either side of entry.
-  if (field === 'tp') level = isLong ? Math.max(level, currentPrice) : Math.min(level, currentPrice);
-  else level = isLong ? Math.min(level, currentPrice) : Math.max(level, currentPrice);
+  const bracketReference = ownerKind === 'order' ? referencePrice : currentPrice;
+  if (field === 'tp') level = isLong ? Math.max(level, bracketReference) : Math.min(level, bracketReference);
+  else level = isLong ? Math.min(level, bracketReference) : Math.max(level, bracketReference);
   const offset = field === 'tp'
     ? (isLong ? level - referencePrice : referencePrice - level)
     : (isLong ? referencePrice - level : level - referencePrice);
