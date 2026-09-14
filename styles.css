@@ -93,7 +93,7 @@ canvas.dragging-x { cursor: grabbing; }
 .account-metrics b { color: var(--ink); font-weight: 500; }
 .controls { display: flex; flex-direction: column; gap: 28px; padding-top: 3px; }
 .control-block { border-bottom: 1px solid var(--line); padding-bottom: 25px; }
-.section-label { display: block; margin-bottom: 17px; color: var(--muted); font-size: 12px; }
+.section-label { display: block; margin-bottom: 10px; color: var(--muted); font-size: 12px; }
 .transport { display: grid; grid-template-columns: 1fr 1fr 42px 42px; gap: 7px; }
 button { border: 1px solid var(--ink); background: transparent; color: var(--ink); height: 40px; font: 500 12px 'DM Mono', monospace; cursor: pointer; transition: background .2s, color .2s; }
 button:hover, button:focus-visible { background: var(--ink); color: var(--paper); outline: none; }
